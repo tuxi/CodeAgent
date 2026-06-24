@@ -5,14 +5,28 @@
 //  Created by xiaoyuan on 2026/6/24.
 //
 
+#if os(macOS)
+
 import SwiftUI
 
 struct CodeAgentRootView: View {
+    
+    @State private var selection: InspectorSelection?
+    
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        NavigationSplitView {
+            SidebarView()
+        } content: {
+            ConversationTimelineView(selection: $selection)
+        } detail: {
+            InspectorView(selection: selection)
+        }
+        .navigationSplitViewStyle(.balanced)
     }
 }
 
 #Preview {
     CodeAgentRootView()
 }
+
+#endif

@@ -8,11 +8,27 @@
 import SwiftUI
 
 struct SidebarView: View {
-    var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
-    }
-}
 
-#Preview {
-    SidebarView()
+    let sessions = [
+        "DreamAI",
+        "AI Video",
+        "MCP Debug",
+        "iOS Agent"
+    ]
+
+    var body: some View {
+
+        List {
+
+            Section("Recent") {
+
+                ForEach(sessions, id: \.self) { item in
+
+                    Label(item, systemImage: "bubble.left")
+                }
+            }
+
+        }
+        .navigationTitle("CodeAgent")
+    }
 }
