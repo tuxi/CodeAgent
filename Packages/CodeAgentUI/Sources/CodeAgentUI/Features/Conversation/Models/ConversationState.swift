@@ -69,7 +69,7 @@ public struct ConversationState {
     /// 当前 turn 的 artifact 列表（按 toolCallIDs 顺序）。
     public var currentArtifacts: [ArtifactNode] {
         guard let turn = currentTurn else { return [] }
-        return turn.toolCallIDs.compactMap { turn.artifacts[$0] }
+        return turn.toolCallIDs.compactMap { turn.artifactGraph.nodes[$0] }
     }
 }
 
@@ -113,8 +113,8 @@ public struct TurnGroup: Identifiable, Sendable {
     /// Subagent 引用列表。
     public var subagentRefs: [SubagentItem]
 
-    /// callID → ArtifactNode（语义投影，upsert 非 append）。
-    public var artifacts: [String: ArtifactNode]
+    /// Artifact 语义图（v4.3: nodes + typed edges）。
+    public var artifactGraph: ArtifactGraph
 
     // MARK: - Init
 
@@ -129,7 +129,7 @@ public struct TurnGroup: Identifiable, Sendable {
         self.approvalRequests = []
         self.todoSnapshots = []
         self.subagentRefs = []
-        self.artifacts = [:]
+        self.artifactGraph = ArtifactGraph()
     }
 }
 
@@ -296,9 +296,10 @@ extension ConversationState {
             item.result = result
             item.status = result.error == nil ? .completed : .failed
             turn.toolCalls[callID] = item
-            // 语义映射：tool execution → ArtifactNode（upsert by callID）
+            // 语义编译 + 图更新（v4.3: upsert node + build cross-reference edges）
             if let node = ToolSemanticCompiler.compile(item, turnID: tid) {
-                turn.artifacts[callID] = node
+                turn.artifactGraph.upsert(node)
+                buildCrossReferenceEdges(for: node, in: &turn)
             }
             turns[tid] = turn
 
@@ -378,6 +379,30 @@ extension ConversationState {
         }
         if pendingApproval?.id == id {
             pendingApproval = nil
+        }
+    }
+
+    /// v4.3: 为新节点建立与同 turn 已有节点的交叉引用边。
+    /// 规则：相同 filePath → `.references`
+    private mutating func buildCrossReferenceEdges(for node: ArtifactNode, in turn: inout TurnGroup) {
+        let newPath = extractReferencedPath(from: node)
+        guard let newPath else { return }
+
+        for existing in turn.artifactGraph.allNodes where existing.callID != node.callID {
+            if let existingPath = extractReferencedPath(from: existing), existingPath == newPath {
+                turn.artifactGraph.addEdge(ArtifactEdge(
+                    from: node.callID, to: existing.callID, type: .references
+                ))
+            }
+        }
+    }
+
+    /// 从 ArtifactNode 提取被引用的文件路径（用于边构建匹配）。
+    private func extractReferencedPath(from node: ArtifactNode) -> String? {
+        switch node.content {
+        case .diff(let p):  return p.filePath
+        case .file(let p):  return p.filePath
+        case .terminal:     return nil
         }
     }
 }

@@ -62,7 +62,7 @@ private struct TurnCardView: View {
             // ── 工具调用（v4.2.1: ToolArtifactPresenter = composition, not merge）──
             ForEach(turn.toolCallIDs, id: \.self) { callID in
                 if let item = turn.toolCalls[callID] {
-                    ToolArtifactPresenter(item: item, artifact: turn.artifacts[callID])
+                    ToolArtifactPresenter(item: item, artifact: turn.artifactGraph.nodes[callID])
                 }
             }
             // ── 审批请求 ──
@@ -212,7 +212,7 @@ private struct ToolArtifactPresenter: View {
     }
 
     private var headerTitle: String {
-        artifact?.title ?? item.toolName
+        item.toolName + ":" + (artifact?.title ?? "")
     }
 
     private var headerIcon: String {
