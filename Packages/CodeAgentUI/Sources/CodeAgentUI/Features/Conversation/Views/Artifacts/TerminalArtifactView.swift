@@ -10,18 +10,75 @@ import SwiftUI
 import UIKit
 #endif
 
-/// 终端输出 artifact 的纯渲染视图。
+// MARK: - TerminalArtifactBody (content only, used by UnifiedToolCard)
+
+/// 终端输出渲染体 — 无标题栏、无折叠控件，纯内容。
+/// 由 `UnifiedToolCard` 或 `TerminalArtifactView` 内嵌使用。
+struct TerminalArtifactBody: View {
+    let command: String
+    let output: String
+    let exitCode: Int?
+
+    @State private var showCopied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollView([.horizontal, .vertical]) {
+                Text(output)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.green)
+                    .textSelection(.enabled)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .background(.black.opacity(0.85))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .frame(maxHeight: 300)
+
+            HStack {
+                Spacer()
+                Button {
+                    copyToClipboard(output)
+                    showCopied = true
+                    Task {
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                        showCopied = false
+                    }
+                } label: {
+                    Label(
+                        showCopied ? "Copied!" : "Copy",
+                        systemImage: showCopied ? "checkmark" : "doc.on.doc"
+                    )
+                    .font(.caption2)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(showCopied ? .green : .secondary)
+            }
+        }
+    }
+
+    private func copyToClipboard(_ text: String) {
+        #if os(iOS)
+        UIPasteboard.general.string = text
+        #elseif os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #endif
+    }
+}
+
+// MARK: - TerminalArtifactView (standalone, with chrome)
+
+/// 终端输出 artifact 的独立渲染视图（带标题栏和折叠控件）。
 struct TerminalArtifactView: View {
     let command: String
     let output: String
     let exitCode: Int?
 
     @State private var isExpanded = false
-    @State private var showCopied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // 标题栏
             Button {
                 withAnimation { isExpanded.toggle() }
             } label: {
@@ -48,43 +105,9 @@ struct TerminalArtifactView: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                VStack(alignment: .leading, spacing: 0) {
-                    ScrollView([.horizontal, .vertical]) {
-                        Text(output)
-                            .font(.caption2.monospaced())
-                            .foregroundStyle(.green)
-                            .textSelection(.enabled)
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .background(.black.opacity(0.85))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .frame(maxHeight: 300)
-
-                    // 复制按钮
-                    HStack {
-                        Spacer()
-                        Button {
-                            copyToClipboard(output)
-                            showCopied = true
-                            Task {
-                                try? await Task.sleep(nanoseconds: 1_500_000_000)
-                                showCopied = false
-                            }
-                        } label: {
-                            Label(
-                                showCopied ? "Copied!" : "Copy",
-                                systemImage: showCopied ? "checkmark" : "doc.on.doc"
-                            )
-                            .font(.caption2)
-                        }
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(showCopied ? .green : .secondary)
-                    }
-                }
+                TerminalArtifactBody(command: command, output: output, exitCode: exitCode)
             } else {
-                // 折叠态：预览输出前几行
-                let preview = previewLines
+                let preview = output.components(separatedBy: "\n").prefix(8).joined(separator: "\n")
                 if !preview.isEmpty {
                     Text(preview)
                         .font(.caption2.monospaced())
@@ -96,21 +119,5 @@ struct TerminalArtifactView: View {
         .padding(8)
         .background(.quaternary.opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
-    // MARK: - Helpers
-
-    private var previewLines: String {
-        let lines = output.components(separatedBy: "\n")
-        return lines.prefix(8).joined(separator: "\n")
-    }
-
-    private func copyToClipboard(_ text: String) {
-        #if os(iOS)
-        UIPasteboard.general.string = text
-        #elseif os(macOS)
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-        #endif
     }
 }

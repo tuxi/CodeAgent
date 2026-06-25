@@ -59,13 +59,12 @@ private struct TurnCardView: View {
                 ThinkingSection(thoughts: turn.thoughts, isExpanded: $thinkingExpanded)
             }
 
-            // ── 工具调用 ──
+            // ── 工具调用（v4.2.1: ToolArtifactPresenter = composition, not merge）──
             ForEach(turn.toolCallIDs, id: \.self) { callID in
                 if let item = turn.toolCalls[callID] {
-                    ToolCardView(item: item)
+                    ToolArtifactPresenter(item: item, artifact: turn.artifacts[callID])
                 }
             }
-
             // ── 审批请求 ──
             ForEach(turn.approvalRequests) { approval in
                 if !approval.resolved {
@@ -79,12 +78,6 @@ private struct TurnCardView: View {
                         }
                     )
                 }
-            }
-
-            // ── Artifact（语义投影，按 toolCallIDs 顺序渲染）──
-            let orderedArtifacts = turn.toolCallIDs.compactMap { turn.artifacts[$0] }
-            ForEach(orderedArtifacts) { artifact in
-                ArtifactView(artifact: artifact)
             }
 
             // ── Todo ──
@@ -178,57 +171,139 @@ private struct ThinkingSection: View {
     }
 }
 
-private struct ToolCardView: View {
+// MARK: - ToolArtifactPresenter (v4.2.1: UI composition layer)
+
+//  Design principle:
+//  UI can MERGE DISPLAY, but must NOT MERGE DATA STRUCTURES.
+//  ToolCallItem and ArtifactNode remain independent models.
+//  This view is a pure composition/presenter — it joins, not owns.
+
+/// 工具-Artifact 组合呈现器。
+/// 纯 layout 层：将 ToolCallItem（执行元信息）和 ArtifactNode（语义输出）
+/// 组合为一张卡片，但不耦合二者的数据模型。
+private struct ToolArtifactPresenter: View {
     let item: ToolCallItem
+    let artifact: ArtifactNode?
 
     @State private var expanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Button {
-                withAnimation { expanded.toggle() }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: statusIcon)
-                        .font(.caption)
-                    Text(item.toolName)
-                        .font(.caption.monospaced().weight(.medium))
-                    Spacer()
-                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.caption2)
-                }
-                .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
+            ToolHeaderView(
+                icon: headerIcon,
+                title: headerTitle,
+                isRunning: item.status == .running,
+                expanded: $expanded
+            )
 
             if expanded {
-                if let args = item.toolArgs, case .object(let dict) = args {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(Array(dict.keys.sorted()), id: \.self) { key in
-                            Text("\(key): \(dict[key]?.stringValue ?? "")")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                    .padding(.leading, 20)
-                }
-
-                // v4: ToolCardView 不再展示 observation — ArtifactView 是唯一语义输出层
-                if let err = item.result?.error, !err.isEmpty {
-                    Text("Error: \(err)")
-                        .font(.caption2)
-                        .foregroundStyle(.red)
-                        .padding(.leading, 20)
+                if let artifact {
+                    // Artifact 作为独立渲染单元内联展示
+                    ArtifactBodyView(artifact: artifact)
+                } else {
+                    // 非 artifact 工具：展示 args + error
+                    ToolFallbackView(item: item)
                 }
             }
         }
+        .padding(8)
+        .background(.quaternary.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
-    private var statusIcon: String {
+    private var headerTitle: String {
+        artifact?.title ?? item.toolName
+    }
+
+    private var headerIcon: String {
+        if let a = artifact {
+            switch a.kind {
+            case .diff: return "arrow.triangle.swap"
+            case .file: return "doc.text"
+            case .terminal: return "terminal"
+            }
+        }
         switch item.status {
         case .running: return "hourglass"
         case .completed: return "checkmark.circle"
         case .failed: return "xmark.circle"
+        }
+    }
+}
+
+// MARK: - ToolHeaderView（可复用）
+
+/// 工具/Artifact 卡片标题行 — 纯展示组件。
+private struct ToolHeaderView: View {
+    let icon: String
+    let title: String
+    let isRunning: Bool
+    @Binding var expanded: Bool
+
+    var body: some View {
+        Button {
+            withAnimation { expanded.toggle() }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.caption)
+                Text(title)
+                    .font(.caption.monospaced().weight(.medium))
+                    .lineLimit(1)
+                if isRunning {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .frame(width: 12, height: 12)
+                }
+                Spacer()
+                Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                    .font(.caption2)
+            }
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - ArtifactBodyView（独立渲染单元）
+
+/// Artifact 内容渲染 — 独立于 ToolCard，可单独复用。
+private struct ArtifactBodyView: View {
+    let artifact: ArtifactNode
+
+    var body: some View {
+        switch artifact.content {
+        case .diff(let payload):
+            DiffArtifactBody(filePath: payload.filePath, diffContent: payload.diffContent)
+        case .file(let payload):
+            FileArtifactBody(filePath: payload.filePath, content: payload.content, language: payload.language)
+        case .terminal(let payload):
+            TerminalArtifactBody(command: payload.command, output: payload.output, exitCode: payload.exitCode)
+        }
+    }
+}
+
+// MARK: - ToolFallbackView（非 artifact 工具回退）
+
+/// 非 artifact 工具的展开展示 — args + error，不含 observation。
+private struct ToolFallbackView: View {
+    let item: ToolCallItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if let args = item.toolArgs, case .object(let dict) = args {
+                ForEach(Array(dict.keys.sorted()), id: \.self) { key in
+                    Text("\(key): \(dict[key]?.stringValue ?? "")")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            if let err = item.result?.error, !err.isEmpty {
+                Text("Error: \(err)")
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+            }
         }
     }
 }

@@ -7,7 +7,47 @@
 
 import SwiftUI
 
-/// 文件内容 artifact 的纯渲染视图。
+// MARK: - FileArtifactBody (content only, used by UnifiedToolCard)
+
+/// 文件内容渲染体 — 无标题栏、无折叠控件，纯内容。
+/// 由 `UnifiedToolCard` 或 `FileArtifactView` 内嵌使用。
+struct FileArtifactBody: View {
+    let filePath: String
+    let content: String
+    let language: String?
+
+    var body: some View {
+        ScrollView([.horizontal, .vertical]) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(numberedLines.enumerated()), id: \.offset) { index, line in
+                    HStack(spacing: 8) {
+                        Text("\(index + 1)")
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 32, alignment: .trailing)
+                        Text(line)
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.primary)
+                            .textSelection(.enabled)
+                        Spacer()
+                    }
+                }
+            }
+            .padding(8)
+        }
+        .background(.black.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .frame(maxHeight: 400)
+    }
+
+    private var numberedLines: [String] {
+        content.components(separatedBy: "\n")
+    }
+}
+
+// MARK: - FileArtifactView (standalone, with chrome)
+
+/// 文件内容 artifact 的独立渲染视图（带标题栏和折叠控件）。
 struct FileArtifactView: View {
     let filePath: String
     let content: String
@@ -19,7 +59,6 @@ struct FileArtifactView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // 标题栏
             Button {
                 withAnimation { isExpanded.toggle() }
             } label: {
@@ -49,32 +88,9 @@ struct FileArtifactView: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                ScrollView([.horizontal, .vertical]) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(numberedLines.enumerated()), id: \.offset) { index, line in
-                            HStack(spacing: 8) {
-                                // 行号
-                                Text("\(index + 1)")
-                                    .font(.caption2.monospaced())
-                                    .foregroundStyle(.tertiary)
-                                    .frame(width: 32, alignment: .trailing)
-                                // 内容
-                                Text(line)
-                                    .font(.caption2.monospaced())
-                                    .foregroundStyle(.primary)
-                                    .textSelection(.enabled)
-                                Spacer()
-                            }
-                        }
-                    }
-                    .padding(8)
-                }
-                .background(.black.opacity(0.06))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .frame(maxHeight: 400)
+                FileArtifactBody(filePath: filePath, content: content, language: language)
             } else {
-                // 折叠态：预览前 N 行
-                let preview = previewLines
+                let preview = content.components(separatedBy: "\n").prefix(maxCollapsedLines).joined(separator: "\n")
                 if !preview.isEmpty {
                     Text(preview)
                         .font(.caption2.monospaced())
@@ -88,22 +104,11 @@ struct FileArtifactView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
-    // MARK: - Helpers
-
     private var shortFileName: String {
         (filePath as NSString).lastPathComponent
     }
 
     private var lineCount: Int {
         content.components(separatedBy: "\n").count
-    }
-
-    private var numberedLines: [String] {
-        content.components(separatedBy: "\n")
-    }
-
-    private var previewLines: String {
-        let lines = content.components(separatedBy: "\n")
-        return lines.prefix(maxCollapsedLines).joined(separator: "\n")
     }
 }

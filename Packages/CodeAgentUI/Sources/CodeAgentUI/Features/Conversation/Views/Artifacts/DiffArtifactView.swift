@@ -7,7 +7,49 @@
 
 import SwiftUI
 
-/// Diff/patch artifact 的纯渲染视图。
+// MARK: - DiffArtifactBody (content only, used by UnifiedToolCard)
+
+/// Diff 内容渲染体 — 无标题栏、无折叠控件，纯内容。
+/// 由 `UnifiedToolCard` 或 `DiffArtifactView` 内嵌使用。
+struct DiffArtifactBody: View {
+    let filePath: String?
+    let diffContent: String
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(diffLines) { line in
+                    Text(line.text)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(line.color)
+                        .textSelection(.enabled)
+                }
+            }
+        }
+        .frame(maxHeight: 300)
+    }
+
+    private struct DiffLine: Identifiable {
+        let id = UUID()
+        let text: String
+        let color: Color
+    }
+
+    private var diffLines: [DiffLine] {
+        diffContent.components(separatedBy: "\n").map { line in
+            let color: Color
+            if line.hasPrefix("+") { color = .green }
+            else if line.hasPrefix("-") { color = .red }
+            else if line.hasPrefix("@@") { color = .blue }
+            else { color = .secondary }
+            return DiffLine(text: line, color: color)
+        }
+    }
+}
+
+// MARK: - DiffArtifactView (standalone, with chrome)
+
+/// Diff/patch artifact 的独立渲染视图（带标题栏和折叠控件）。
 struct DiffArtifactView: View {
     let filePath: String?
     let diffContent: String
@@ -18,7 +60,6 @@ struct DiffArtifactView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // 标题栏
             Button {
                 withAnimation { isExpanded.toggle() }
             } label: {
@@ -37,19 +78,9 @@ struct DiffArtifactView: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                ScrollView(.horizontal) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(diffLines) { line in
-                            Text(line.text)
-                                .font(.caption2.monospaced())
-                                .foregroundStyle(line.color)
-                                .textSelection(.enabled)
-                        }
-                    }
-                }
-                .frame(maxHeight: 300)
+                DiffArtifactBody(filePath: filePath, diffContent: diffContent)
             } else {
-                let preview = previewLines
+                let preview = diffContent.components(separatedBy: "\n").prefix(maxCollapsedLines).joined(separator: "\n")
                 if !preview.isEmpty {
                     Text(preview)
                         .font(.caption2.monospaced())
@@ -61,35 +92,5 @@ struct DiffArtifactView: View {
         .padding(8)
         .background(.quaternary.opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
-    // MARK: - Line model
-
-    private struct DiffLine: Identifiable {
-        let id = UUID()
-        let text: String
-        let color: Color
-    }
-
-    /// 按行着色：+ 绿 / - 红 / @@ 蓝 / 其他 secondary。
-    private var diffLines: [DiffLine] {
-        diffContent.components(separatedBy: "\n").map { line in
-            let color: Color
-            if line.hasPrefix("+") {
-                color = .green
-            } else if line.hasPrefix("-") {
-                color = .red
-            } else if line.hasPrefix("@@") {
-                color = .blue
-            } else {
-                color = .secondary
-            }
-            return DiffLine(text: line, color: color)
-        }
-    }
-
-    private var previewLines: String {
-        let lines = diffContent.components(separatedBy: "\n")
-        return lines.prefix(maxCollapsedLines).joined(separator: "\n")
     }
 }
