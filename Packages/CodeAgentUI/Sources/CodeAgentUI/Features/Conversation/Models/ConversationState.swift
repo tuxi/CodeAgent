@@ -65,6 +65,12 @@ public struct ConversationState {
     public var orderedTurns: [TurnGroup] {
         turnIDs.compactMap { turns[$0] }
     }
+
+    /// 当前 turn 的 artifact 列表（按 toolCallIDs 顺序）。
+    public var currentArtifacts: [ArtifactNode] {
+        guard let turn = currentTurn else { return [] }
+        return turn.toolCallIDs.compactMap { turn.artifacts[$0] }
+    }
 }
 
 // MARK: - TurnGroup
@@ -107,6 +113,9 @@ public struct TurnGroup: Identifiable, Sendable {
     /// Subagent 引用列表。
     public var subagentRefs: [SubagentItem]
 
+    /// callID → ArtifactNode（语义投影，upsert 非 append）。
+    public var artifacts: [String: ArtifactNode]
+
     // MARK: - Init
 
     public init(turnID: String, userMessage: String) {
@@ -120,6 +129,7 @@ public struct TurnGroup: Identifiable, Sendable {
         self.approvalRequests = []
         self.todoSnapshots = []
         self.subagentRefs = []
+        self.artifacts = [:]
     }
 }
 
@@ -286,6 +296,10 @@ extension ConversationState {
             item.result = result
             item.status = result.error == nil ? .completed : .failed
             turn.toolCalls[callID] = item
+            // 语义映射：tool execution → ArtifactNode（upsert by callID）
+            if let node = ToolSemanticCompiler.compile(item, turnID: tid) {
+                turn.artifacts[callID] = node
+            }
             turns[tid] = turn
 
         // ── 审批 ──

@@ -81,6 +81,12 @@ private struct TurnCardView: View {
                 }
             }
 
+            // ── Artifact（语义投影，按 toolCallIDs 顺序渲染）──
+            let orderedArtifacts = turn.toolCallIDs.compactMap { turn.artifacts[$0] }
+            ForEach(orderedArtifacts) { artifact in
+                ArtifactView(artifact: artifact)
+            }
+
             // ── Todo ──
             if let lastSnapshot = turn.todoSnapshots.last, !lastSnapshot.todos.isEmpty {
                 TodoSectionView(todos: lastSnapshot.todos)
@@ -207,20 +213,12 @@ private struct ToolCardView: View {
                     .padding(.leading, 20)
                 }
 
-                if let result = item.result {
-                    if let obs = result.observation, !obs.isEmpty {
-                        Text(obs)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                            .padding(.leading, 20)
-                            .lineLimit(5)
-                    }
-                    if let err = result.error, !err.isEmpty {
-                        Text("Error: \(err)")
-                            .font(.caption2)
-                            .foregroundStyle(.red)
-                            .padding(.leading, 20)
-                    }
+                // v4: ToolCardView 不再展示 observation — ArtifactView 是唯一语义输出层
+                if let err = item.result?.error, !err.isEmpty {
+                    Text("Error: \(err)")
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                        .padding(.leading, 20)
                 }
             }
         }
