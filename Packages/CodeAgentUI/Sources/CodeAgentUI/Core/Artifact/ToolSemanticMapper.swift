@@ -38,6 +38,11 @@ public struct ToolSemanticCompiler {
 
     private static func determineKind(toolName: String) -> WorkProductKind? {
         let name = toolName.lowercased()
+        
+        let listPatterns = ["list_files"]
+        for p in listPatterns where name.contains(p) {
+            return .listFiles
+        }
 
         let createPatterns = ["create", "new"]
         for p in createPatterns where name.contains(p) {
@@ -66,6 +71,8 @@ public struct ToolSemanticCompiler {
 
     private static func inferRenderKind(kind: WorkProductKind, tool: ToolCallItem) -> ArtifactKind {
         switch kind {
+        case .listFiles:
+            return .files
         case .fileEdited:
             // Check if observation looks like a diff
             let obs = tool.result?.observation ?? ""
@@ -90,6 +97,12 @@ public struct ToolSemanticCompiler {
             let (added, removed) = countDiffLines(diffContent)
             return .diff(DiffPayload(filePath: path, diffContent: diffContent, addedLines: added, removedLines: removed))
         case .file:
+            let path = extractFilePath(from: tool) ?? "unknown"
+            let content = tool.result?.observation ?? ""
+            let language = extractLanguage(from: tool, filePath: path)
+            let isNew = (kind == .fileCreated)
+            return .file(FilePayload(filePath: path, content: content, language: language, isNew: isNew))
+        case .files:
             let path = extractFilePath(from: tool) ?? "unknown"
             let content = tool.result?.observation ?? ""
             let language = extractLanguage(from: tool, filePath: path)

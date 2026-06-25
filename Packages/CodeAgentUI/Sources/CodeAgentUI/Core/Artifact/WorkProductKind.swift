@@ -13,6 +13,8 @@ import Foundation
 /// Work Product 的种类，描述"用户得到了什么"，而非"用了什么工具"。
 /// 由 `ToolSemanticCompiler` 从 toolName + toolArgs 推导。
 public enum WorkProductKind: String, Sendable, CaseIterable {
+    // 查看目录
+    case listFiles
     /// 读取文件内容（read_file 等）
     case fileRead
     /// 创建新文件（write_file 创建新文件）

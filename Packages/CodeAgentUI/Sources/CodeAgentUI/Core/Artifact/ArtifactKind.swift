@@ -16,4 +16,5 @@ public enum ArtifactKind: String, Sendable, CaseIterable {
     case diff
     case file
     case terminal
+    case files
 }

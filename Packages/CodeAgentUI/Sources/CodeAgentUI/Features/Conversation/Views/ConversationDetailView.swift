@@ -34,8 +34,6 @@ public struct ConversationDetailView: View {
         VStack(spacing: 0) {
             if let vm = viewModel ?? store.activeConversationViewModel {
                 ConversationTimelineView(viewModel: vm)
-
-                // 底部输入区域
                 chatInput(vm: vm)
             } else if let id = conversationID, store.conversation(id: id) != nil {
                 ConversationTimelineView(viewModel: placeholderViewModel)

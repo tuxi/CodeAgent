@@ -59,7 +59,7 @@ private struct TurnCardView: View {
                 ThinkingSection(thoughts: turn.thoughts, isExpanded: $thinkingExpanded)
             }
 
-            // ── Work Product（P4.4: three-tier summary → path → content）──
+            // ── Work Product（P4.5.1: summary + path → Inspector）──
             ForEach(turn.toolCallIDs, id: \.self) { callID in
                 if let item = turn.toolCalls[callID] {
                     WorkProductCard(item: item, artifact: turn.artifactGraph.nodes[callID])
@@ -171,26 +171,24 @@ private struct ThinkingSection: View {
     }
 }
 
-// MARK: - WorkProductCard (P4.4: three-tier layout)
+// MARK: - WorkProductCard (P4.5.1: summary + path → existing Inspector)
 
-//  Design principles:
-//  UI can MERGE DISPLAY, but must NOT MERGE DATA STRUCTURES.
-//  Three tiers: summary (Timeline) → path (metadata, non-scrollable) → content (scrollable).
-//  Modeled after Claude Code's Work Product visualization.
+//  P4.5.1: Timeline 保留 summary + path，不造新的 PreviewPane。
+//  交互：点击卡片 → 展开 path；点击 path → 打开右侧已有 Inspector。
 
-/// Work Product 卡片 — P4.4 三层结构。
-/// 1. summary: Timeline 显示（如 "Edited file.swift +3 -1"），始终可见
-/// 2. path: 文件路径/命令，元数据行，不在滚动区
-/// 3. content: 可滚动详情
+/// Work Product 卡片 — P4.5.1 两层层级。
+/// Tier 1: summary（始终可见，点击展开/折叠）
+/// Tier 2: path（展开后显示，点击打开 Inspector）
 private struct WorkProductCard: View {
     let item: ToolCallItem
     let artifact: ArtifactNode?
 
+    @Environment(WorkspaceStore.self) private var store
     @State private var expanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // ── Tier 1: Summary（Timeline 显示）──
+            // ── Tier 1: Summary ──
             Button {
                 withAnimation { expanded.toggle() }
             } label: {
@@ -213,31 +211,36 @@ private struct WorkProductCard: View {
             }
             .buttonStyle(.plain)
 
-            if expanded {
+            // ── Tier 2: Path（展开后显示，可点击打开 Inspector）──
+            if expanded, let artifact, let path = artifact.path, !path.isEmpty {
                 Divider()
                     .padding(.vertical, 4)
 
-                if let artifact {
-                    // ── Tier 2: Path header（元数据，非滚动）──
-                    if let path = artifact.path, !path.isEmpty {
-                        HStack(spacing: 4) {
-                            Image(systemName: "folder")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                            Text(path)
-                                .font(.caption2.monospaced())
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                            Spacer()
-                        }
-                        .padding(.bottom, 4)
+                Button {
+                    // 利用已有的 Inspector 体系打开文件
+                    store.showInspector(.file(path))
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "folder")
+                            .font(.caption2)
+                        Text(path)
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.blue)
+                            .lineLimit(2)
+                        Spacer()
+                        Image(systemName: "arrow.up.forward.app")
+                            .font(.caption2)
+                            .foregroundStyle(.blue)
                     }
-
-                    // ── Tier 3: Scrollable content ──
-                    ArtifactBodyView(artifact: artifact)
-                } else {
-                    ToolFallbackView(item: item)
                 }
+                .buttonStyle(.plain)
+            }
+
+            // 非 artifact 回退：展开时显示 args + error
+            if expanded, artifact == nil {
+                Divider()
+                    .padding(.vertical, 4)
+                ToolFallbackContent(item: item)
             }
         }
         .padding(8)
@@ -245,9 +248,6 @@ private struct WorkProductCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
-    // MARK: - Header
-
-    /// Timeline 显示：运行时生成 summary，否则 toolName。
     private var headerTitle: String {
         if let a = artifact {
             return SummaryRenderer.summary(for: a)
@@ -262,6 +262,7 @@ private struct WorkProductCard: View {
             case .fileCreated:  return "doc.badge.plus"
             case .fileEdited:   return "arrow.triangle.swap"
             case .commandRun:   return "terminal"
+            case .listFiles: return "folder.fill"
             }
         }
         switch item.status {
@@ -272,28 +273,8 @@ private struct WorkProductCard: View {
     }
 }
 
-// MARK: - ArtifactBodyView（独立渲染单元）
-
-/// Artifact 内容渲染 — 独立于 WorkProductCard，可单独复用。
-private struct ArtifactBodyView: View {
-    let artifact: ArtifactNode
-
-    var body: some View {
-        switch artifact.content {
-        case .diff(let payload):
-            DiffArtifactBody(filePath: payload.filePath, diffContent: payload.diffContent)
-        case .file(let payload):
-            FileArtifactBody(filePath: payload.filePath, content: payload.content, language: payload.language)
-        case .terminal(let payload):
-            TerminalArtifactBody(command: payload.command, output: payload.output, exitCode: payload.exitCode)
-        }
-    }
-}
-
-// MARK: - ToolFallbackView（非 artifact 工具回退）
-
-/// 非 artifact 工具的展开展示 — args + error，不含 observation。
-private struct ToolFallbackView: View {
+/// 非 artifact 工具的 fallback — args + error。
+private struct ToolFallbackContent: View {
     let item: ToolCallItem
 
     var body: some View {
@@ -305,7 +286,6 @@ private struct ToolFallbackView: View {
                         .foregroundStyle(.tertiary)
                 }
             }
-
             if let err = item.result?.error, !err.isEmpty {
                 Text("Error: \(err)")
                     .font(.caption2)
@@ -314,6 +294,7 @@ private struct ToolFallbackView: View {
         }
     }
 }
+
 
 private struct ApprovalCardInline: View {
     let request: ApprovalRequest

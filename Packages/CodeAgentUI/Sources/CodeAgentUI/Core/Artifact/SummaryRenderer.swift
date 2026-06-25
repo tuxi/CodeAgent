@@ -53,7 +53,6 @@ public struct SummaryRenderer {
                 return "Ran \(shortCmd) (exit \(code))"
             }
             return "Ran \(shortCmd)"
-
         default:
             return node.kind.rawValue
         }

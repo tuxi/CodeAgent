@@ -41,6 +41,9 @@ public final class WorkspaceStore {
     public private(set) var inspectorSelection: InspectorSelection?
     public var isInspectorPresented: Bool = false
 
+    /// P4.5: Workbench 预览面板状态（独立状态树）。
+    public let workbench = WorkbenchState()
+
     // MARK: - Runtime Client
 
     /// 与 CodeAgent Runtime 通信的客户端（agent-wire v1）。
