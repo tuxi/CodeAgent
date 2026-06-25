@@ -12,7 +12,7 @@ import Foundation
 
 /// Artifact 渲染种类 — 决定 UI 渲染策略（DiffArtifactBody / FileArtifactBody / TerminalArtifactBody）。
 /// 与 `WorkProductKind`（语义层）正交：同一个 fileEdited 可能渲染为 diff 或 file。
-public enum ArtifactKind: String, Sendable, CaseIterable {
+public enum ArtifactKind: String, Sendable, Hashable, CaseIterable {
     case diff
     case file
     case terminal

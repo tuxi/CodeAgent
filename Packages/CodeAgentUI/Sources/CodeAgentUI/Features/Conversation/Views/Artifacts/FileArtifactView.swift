@@ -15,9 +15,10 @@ struct FileArtifactBody: View {
     let filePath: String
     let content: String
     let language: String?
+    var maxHeight: CGFloat? = 400
 
     var body: some View {
-        ScrollView([.horizontal, .vertical]) {
+        let scroll = ScrollView([.horizontal, .vertical]) {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(numberedLines.enumerated()), id: \.offset) { index, line in
                     HStack(spacing: 8) {
@@ -37,7 +38,12 @@ struct FileArtifactBody: View {
         }
         .background(.black.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 6))
-        .frame(maxHeight: 400)
+
+        if let maxHeight {
+            scroll.frame(maxHeight: maxHeight)
+        } else {
+            scroll
+        }
     }
 
     private var numberedLines: [String] {

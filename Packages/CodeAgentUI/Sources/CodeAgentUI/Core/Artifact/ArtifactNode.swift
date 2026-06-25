@@ -20,7 +20,7 @@ import Foundation
 /// - `renderKind: ArtifactKind` — 渲染层（diff/file/terminal），决定使用哪个 Body View
 ///
 /// Summary 不存储 — 由 `SummaryRenderer` 运行时生成（i18n-ready）。
-public struct ArtifactNode: Identifiable, Sendable {
+public struct ArtifactNode: Identifiable, Sendable, Hashable {
 
     // MARK: - Identity
 

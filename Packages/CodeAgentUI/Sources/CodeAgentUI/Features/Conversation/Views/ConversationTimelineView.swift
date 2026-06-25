@@ -211,29 +211,90 @@ private struct WorkProductCard: View {
             }
             .buttonStyle(.plain)
 
-            // ── Tier 2: Path（展开后显示，可点击打开 Inspector）──
-            if expanded, let artifact, let path = artifact.path, !path.isEmpty {
-                Divider()
-                    .padding(.vertical, 4)
+            // ── Tier 2: Work Product 展开内容 ──
+            if expanded, let artifact {
+                switch artifact.content {
+                case .file(let payload):
+                    Divider()
+                        .padding(.vertical, 4)
 
-                Button {
-                    // 利用已有的 Inspector 体系打开文件
-                    store.showInspector(.file(path))
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "folder")
-                            .font(.caption2)
-                        Text(path)
-                            .font(.caption2.monospaced())
-                            .foregroundStyle(.blue)
-                            .lineLimit(2)
-                        Spacer()
-                        Image(systemName: "arrow.up.forward.app")
-                            .font(.caption2)
-                            .foregroundStyle(.blue)
+                    Button {
+                        store.showInspector(.file(payload))
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "doc.text")
+                                .font(.caption2)
+                            Text(payload.filePath)
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.blue)
+                                .lineLimit(2)
+                            Spacer()
+                            Image(systemName: "arrow.up.forward.app")
+                                .font(.caption2)
+                                .foregroundStyle(.blue)
+                        }
                     }
+                    .buttonStyle(.plain)
+
+                case .diff(let payload):
+                    Divider()
+                        .padding(.vertical, 4)
+
+                    Button {
+                        store.showInspector(.diff(payload))
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.triangle.swap")
+                                .font(.caption2)
+                            Text("Diff: \(payload.filePath ?? "unknown")")
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.blue)
+                                .lineLimit(2)
+                            Spacer()
+                            if payload.addedLines > 0 {
+                                Text("+\(payload.addedLines)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.green)
+                            }
+                            if payload.removedLines > 0 {
+                                Text("-\(payload.removedLines)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.red)
+                            }
+                            Image(systemName: "arrow.up.forward.app")
+                                .font(.caption2)
+                                .foregroundStyle(.blue)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                case .terminal(let payload):
+                    Divider()
+                        .padding(.vertical, 4)
+
+                    Button {
+                        store.showInspector(.terminal(payload))
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "terminal")
+                                .font(.caption2)
+                            Text("$ \(payload.command)")
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.blue)
+                                .lineLimit(1)
+                            Spacer()
+                            if let code = payload.exitCode {
+                                Text(code == 0 ? "✓" : "✗ \(code)")
+                                    .font(.caption2)
+                                    .foregroundStyle(code == 0 ? .green : .red)
+                            }
+                            Image(systemName: "arrow.up.forward.app")
+                                .font(.caption2)
+                                .foregroundStyle(.blue)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
 
             // 非 artifact 回退：展开时显示 args + error

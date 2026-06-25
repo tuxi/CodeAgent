@@ -12,7 +12,7 @@ import Foundation
 
 /// Artifact 的类型化内容 — v4 中 Artifact 是唯一的 UI 语义输出层。
 /// 由 `ToolSemanticCompiler` 从 `ToolCallItem` 编译并结构化。
-public enum ArtifactContent: Sendable {
+public enum ArtifactContent: Sendable, Hashable {
     case diff(DiffPayload)
     case file(FilePayload)
     case terminal(TerminalPayload)
@@ -21,7 +21,7 @@ public enum ArtifactContent: Sendable {
 // MARK: - DiffPayload
 
 /// Diff/patch/edit 类工具的结构化产出。
-public struct DiffPayload: Sendable {
+public struct DiffPayload: Sendable, Hashable {
     /// 目标文件路径（可能为空，如纯 diff 输出）。
     public let filePath: String?
     /// diff 内容（unified diff 或 patch 文本）。
@@ -42,7 +42,7 @@ public struct DiffPayload: Sendable {
 // MARK: - FilePayload
 
 /// 文件读取/创建类工具的结构化产出。
-public struct FilePayload: Sendable {
+public struct FilePayload: Sendable, Hashable {
     /// 文件路径。
     public let filePath: String
     /// 文件内容。
@@ -63,7 +63,7 @@ public struct FilePayload: Sendable {
 // MARK: - TerminalPayload
 
 /// 终端命令的结构化产出。
-public struct TerminalPayload: Sendable {
+public struct TerminalPayload: Sendable, Hashable {
     /// 执行的命令。
     public let command: String
     /// 终端输出文本。

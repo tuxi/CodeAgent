@@ -14,9 +14,10 @@ import SwiftUI
 struct DiffArtifactBody: View {
     let filePath: String?
     let diffContent: String
+    var maxHeight: CGFloat? = 300
 
     var body: some View {
-        ScrollView(.horizontal) {
+        let scroll = ScrollView(.horizontal) {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(diffLines) { line in
                     Text(line.text)
@@ -26,7 +27,12 @@ struct DiffArtifactBody: View {
                 }
             }
         }
-        .frame(maxHeight: 300)
+
+        if let maxHeight {
+            scroll.frame(maxHeight: maxHeight)
+        } else {
+            scroll
+        }
     }
 
     private struct DiffLine: Identifiable {

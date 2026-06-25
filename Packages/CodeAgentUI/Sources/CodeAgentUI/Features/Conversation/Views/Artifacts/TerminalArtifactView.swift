@@ -18,12 +18,13 @@ struct TerminalArtifactBody: View {
     let command: String
     let output: String
     let exitCode: Int?
+    var maxHeight: CGFloat? = 300
 
     @State private var showCopied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ScrollView([.horizontal, .vertical]) {
+            let scroll = ScrollView([.horizontal, .vertical]) {
                 Text(output)
                     .font(.caption2.monospaced())
                     .foregroundStyle(.green)
@@ -33,7 +34,12 @@ struct TerminalArtifactBody: View {
             }
             .background(.black.opacity(0.85))
             .clipShape(RoundedRectangle(cornerRadius: 6))
-            .frame(maxHeight: 300)
+
+            if let maxHeight {
+                scroll.frame(maxHeight: maxHeight)
+            } else {
+                scroll
+            }
 
             HStack {
                 Spacer()

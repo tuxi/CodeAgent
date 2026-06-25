@@ -21,11 +21,17 @@ public struct InspectorView: View {
 
             switch selection {
 
-            case .file(let file):
+            case .file(let payload):
 
-                FileInspectorView(
-                    fileName: file
-                )
+                FileInspectorView(payload: payload)
+
+            case .diff(let payload):
+
+                DiffInspectorView(payload: payload)
+
+            case .terminal(let payload):
+
+                TerminalInspectorView(payload: payload)
 
             case .todo(let todo):
 
