@@ -17,8 +17,8 @@ extension View {
     ) -> some View {
         navigationDestination(for: AgentNavigationDestination.self) { destination in
             switch destination {
-            case .conversationDetail(let id):
-                ConversationDetailView(conversationID: id)
+            case .conversationDetail(let conversation):
+                ConversationDetailView(conversation: conversation)
             }
         }
     }

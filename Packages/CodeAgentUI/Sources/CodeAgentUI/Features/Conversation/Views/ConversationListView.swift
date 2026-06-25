@@ -11,15 +11,15 @@ struct ConversationListView: View {
 
     @State private var viewModel: ConversationListViewModel
     @Environment(WorkspaceStore.self) private var store
-    @Binding var selectedID: String?
+    @Binding var selected: ConversationRef?
 
-    init(viewModel: ConversationListViewModel, selectedID: Binding<String?>) {
+    init(viewModel: ConversationListViewModel, selected: Binding<ConversationRef?>) {
         self.viewModel = viewModel
-        self._selectedID = selectedID
+        self._selected = selected
     }
 
     var body: some View {
-        List(selection: $selectedID) {
+        List(selection: $selected) {
             if viewModel.isLoading {
                 HStack {
                     Spacer()
@@ -38,7 +38,7 @@ struct ConversationListView: View {
 
             ForEach(viewModel.conversations) { ref in
                 ConversationRow(ref: ref)
-                    .tag(ref.id)
+                    .tag(ref)
             }
         }
         .listStyle(.sidebar)
@@ -48,11 +48,8 @@ struct ConversationListView: View {
         .toolbar {
             ToolbarItem {
                 Button {
-                    Task {
-                        if let ref = await viewModel.createConversation() {
-                            selectedID = ref.id
-                        }
-                    }
+                    // P5.0：不立即创建会话，只开一个本地草稿，等首条消息再创建。
+                    store.beginDraft()
                 } label: {
                     Label("新建会话", systemImage: "square.and.pencil")
                 }

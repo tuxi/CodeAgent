@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import CoreKit
 
 // MARK: - RuntimeHTTPClient
 
@@ -38,6 +39,9 @@ struct RuntimeHTTPClient: Sendable {
         }
 
         let body: [String: String] = ["workspace_path": workspacePath]
+        
+        DLLog(body)
+        
         request.httpBody = try JSONEncoder().encode(body)
 
         let (data, response) = try await session.data(for: request)

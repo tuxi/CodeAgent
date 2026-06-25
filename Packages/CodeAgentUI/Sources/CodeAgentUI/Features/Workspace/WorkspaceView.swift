@@ -35,7 +35,7 @@ public struct WorkspaceView: View {
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 360)
         } detail: {
             NavigationStack(path: $router.path) {
-                ConversationDetailView(conversationID: store.selectedConversationID)
+                ConversationDetailView(conversation: store.selectedConversation)
                     .withAgentNavigationDestinations(router: router, dependencies: dependencies)
             }
             .inspector(isPresented: $store.isInspectorPresented) {

@@ -2,8 +2,10 @@
 //  ConversationDetailView.swift
 //  CodeAgentUI
 //
-//  中间内容：选中会话的事件时间线 + 底部输入框。
-//  点击时间线中的事件会驱动右侧 inspector。
+//  中间内容，三态外壳（P5.0）：
+//    1. 草稿（store.draft != nil）→ 占位空视图 + 工作区选择 chip + 提交首条消息的输入框
+//    2. 活跃会话 → 事件时间线 + 冻结的工作区 chip + 发送消息的输入框
+//    3. 未选中 → ContentUnavailableView
 //
 
 import SwiftUI
@@ -13,77 +15,90 @@ public struct ConversationDetailView: View {
     @Environment(WorkspaceStore.self) private var store
     @Environment(AgentRouter.self) private var router
 
-    @State private var messageText = ""
-
-    private let conversationID: String?
+    private let conversation: ConversationRef?
     private let viewModel: ConversationViewModel?
 
-    public init(conversationID: String? = nil) {
-        self.conversationID = conversationID
-        // viewModel 由 environment 或外部注入
+    public init(conversation: ConversationRef? = nil) {
+        self.conversation = conversation
         self.viewModel = nil
     }
 
     /// 带 ViewModel 的初始化。
-    public init(conversationID: String?, viewModel: ConversationViewModel) {
-        self.conversationID = conversationID
+    public init(conversation: ConversationRef?, viewModel: ConversationViewModel) {
+        self.conversation = conversation
         self.viewModel = viewModel
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            if let vm = viewModel ?? store.activeConversationViewModel {
-                ConversationTimelineView(viewModel: vm)
-                chatInput(vm: vm)
-            } else if let id = conversationID, store.conversation(id: id) != nil {
-                ConversationTimelineView(viewModel: placeholderViewModel)
+        Group {
+            if store.draft != nil {
+                draftView
+            } else if let vm = viewModel ?? store.activeConversationViewModel {
+                activeView(vm: vm)
             } else {
                 ContentUnavailableView(
                     "选择一个会话",
                     systemImage: "bubble.left.and.bubble.right",
-                    description: Text("从左侧列表选择，查看对话详情")
+                    description: Text("从左侧列表选择，或点击 + 新建会话")
                 )
             }
         }
         .toolbar { toolbarContent }
     }
 
-    // MARK: - Chat Input
+    // MARK: - Draft (no session yet)
 
-    private func chatInput(vm: ConversationViewModel) -> some View {
+    private var draftView: some View {
         VStack(spacing: 0) {
-            Divider()
-            HStack(alignment: .bottom, spacing: 8) {
-                TextField("输入消息...", text: $messageText, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .lineLimit(1...5)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .background(.quaternary)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                Button {
-                    guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-                    let text = messageText
-                    messageText = ""
-                    Task { await vm.sendMessage(text) }
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
-                }
-                .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .buttonStyle(.plain)
+            ContentUnavailableView {
+                Label("新建会话", systemImage: "sparkles")
+            } description: {
+                Text(store.draft?.workspace == nil
+                     ? "先选择一个工作区，再描述你的任务"
+                     : "描述一个任务，发送后将创建会话并锁定工作区")
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .frame(maxHeight: .infinity)
+
+            if case .failed(let message) = store.draft?.state {
+                failureBanner(message)
+            }
+
+            WorkspaceChipBar()
+
+            ChatComposer(
+                placeholder: "描述一个任务…",
+                isEnabled: store.draft?.canCommit ?? false
+            ) { text in
+                await store.commitDraft(firstMessage: text)
+                return store.draft == nil   // draft 被清空 = 提交成功
+            }
         }
     }
 
-    // MARK: - Placeholder (no active VM)
+    private func failureBanner(_ message: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+            Text("创建会话失败：\(message)")
+                .lineLimit(2)
+            Spacer()
+        }
+        .font(.caption)
+        .foregroundStyle(.orange)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
 
-    private var placeholderViewModel: ConversationViewModel {
-        let vm = ConversationViewModel(client: store.client)
-        return vm
+    // MARK: - Active session
+
+    private func activeView(vm: ConversationViewModel) -> some View {
+        VStack(spacing: 0) {
+            ConversationTimelineView(viewModel: vm)
+            WorkspaceChipBar()          // 冻结：只读 chip
+            ChatComposer(placeholder: "输入消息…", isEnabled: true) { text in
+                await vm.sendMessage(text)
+                return true
+            }
+        }
     }
 
     // MARK: - Toolbar
@@ -92,7 +107,7 @@ public struct ConversationDetailView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItem {
             Button {
-                router.presentSheet(.pickerCategory)
+                store.beginDraft()
             } label: {
                 Label("新建", systemImage: "square.and.pencil")
             }
@@ -103,7 +118,70 @@ public struct ConversationDetailView: View {
             } label: {
                 Label("详情", systemImage: "sidebar.right")
             }
-            .disabled(conversationID == nil)
+            .disabled(store.selectedConversation == nil)
+        }
+    }
+}
+
+// MARK: - ChatComposer
+
+/// 共享输入框。`onSend` 返回是否成功——成功时清空输入，失败时保留用户文本。
+private struct ChatComposer: View {
+
+    let placeholder: String
+    let isEnabled: Bool
+    let onSend: (String) async -> Bool
+
+    @State private var text = ""
+    @State private var isSending = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+            HStack(alignment: .bottom, spacing: 8) {
+                TextField(placeholder, text: $text, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .lineLimit(1...5)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(.quaternary)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .disabled(!isEnabled)
+
+                Button {
+                    send()
+                } label: {
+                    if isSending {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.title2)
+                    }
+                }
+                .disabled(!canSend)
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private var trimmed: String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canSend: Bool {
+        isEnabled && !trimmed.isEmpty && !isSending
+    }
+
+    private func send() {
+        guard canSend else { return }
+        let toSend = text
+        isSending = true
+        Task {
+            let ok = await onSend(toSend)
+            isSending = false
+            if ok { text = "" }
         }
     }
 }

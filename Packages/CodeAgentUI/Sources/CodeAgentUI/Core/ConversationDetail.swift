@@ -16,11 +16,26 @@ public struct ConversationDetail: Sendable, Codable, Hashable {
     public let createdAt: String
     public let updatedAt: String
 
+    /// P5.0 — 会话绑定的工作区路径（best-effort：服务端未返回时为 nil）。
+    /// 用于历史会话在 UI 上回显其工作区绑定。
+    public let workspacePath: String?
+
     enum CodingKeys: String, CodingKey {
         case id
         case turnCount = "turn_count"
         case messageCount = "message_count"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case workspacePath = "workspace_path"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        turnCount = try c.decode(Int.self, forKey: .turnCount)
+        messageCount = try c.decode(Int.self, forKey: .messageCount)
+        createdAt = try c.decode(String.self, forKey: .createdAt)
+        updatedAt = try c.decode(String.self, forKey: .updatedAt)
+        workspacePath = try c.decodeIfPresent(String.self, forKey: .workspacePath)
     }
 }

@@ -32,6 +32,12 @@ public final class ConversationListViewModel {
 
     // MARK: - Public API
 
+    /// 将一个新会话插入列表顶部（P5.0：commitDraft 创建后调用）。
+    public func prepend(_ ref: ConversationRef) {
+        guard !conversations.contains(where: { $0.id == ref.id }) else { return }
+        conversations.insert(ref, at: 0)
+    }
+
     /// 拉取会话列表。
     public func refresh() async {
         isLoading = true

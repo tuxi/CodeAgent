@@ -22,6 +22,10 @@ public final class ConversationViewModel {
     /// 当前会话引用。
     public private(set) var conversation: ConversationRef?
 
+    /// P5.0 — 本会话绑定的工作区（创建时锁定，不可变）。
+    /// 新建会话由 `commitDraft` 注入；从侧栏打开的历史会话回退到 `detail?.workspacePath`。
+    public let workspace: Workspace?
+
     /// 是否已连接事件流。
     public private(set) var isConnected = false
 
@@ -36,8 +40,18 @@ public final class ConversationViewModel {
 
     // MARK: - Init
 
-    public init(client: RuntimeClient) {
+    public init(client: RuntimeClient, workspace: Workspace? = nil) {
         self.client = client
+        self.workspace = workspace
+    }
+
+    /// 本会话用于展示的工作区标签：优先绑定的 `Workspace`，否则回退到 detail 里的路径名。
+    public var workspaceDisplayName: String? {
+        if let workspace { return workspace.name }
+        if let path = detail?.workspacePath, !path.isEmpty {
+            return URL(fileURLWithPath: path).lastPathComponent
+        }
+        return nil
     }
 
     // MARK: - Public API

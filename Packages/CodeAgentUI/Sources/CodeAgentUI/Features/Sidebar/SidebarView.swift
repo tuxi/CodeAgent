@@ -35,7 +35,7 @@ public struct SidebarView: View {
 
             ConversationListView(
                 viewModel: store.listViewModel,
-                selectedID: $store.selectedConversationID
+                selected: $store.selectedConversation
             )
 
             Divider()

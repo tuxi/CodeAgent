@@ -22,21 +22,33 @@ public final class WorkspaceStore {
     public var selectedTab: SidebarTab = .workflow {
         didSet {
             guard oldValue != selectedTab else { return }
-            selectedConversationID = nil
+            selectedConversation = nil
             dismissInspector()
         }
     }
 
-    public var selectedConversationID: String? {
+    public var selectedConversation: ConversationRef? {
         didSet {
-            guard oldValue != selectedConversationID else { return }
-            if let id = selectedConversationID {
-                Task { await connectToConversation(id: id) }
+            guard oldValue != selectedConversation else { return }
+            if let conversation  = selectedConversation {
+                // 选中一个真实会话即丢弃未提交的草稿。
+                draft = nil
+                Task { await connectToConversation(conversation) }
             } else {
                 activeConversationViewModel = nil
             }
         }
     }
+
+    // MARK: - Session Draft (P5.0 延迟创建)
+
+    /// 未提交的本地占位会话。非 nil 时中间栏展示草稿视图。
+    /// `draft == nil` 且 `activeConversationViewModel == nil` → idle；
+    /// `draft == nil` 且 `activeConversationViewModel != nil` → activeSession。
+    public private(set) var draft: SessionDraft?
+
+    /// 最近打开的工作区（持久化，供草稿选择/预选）。
+    public let recentWorkspaces = RecentWorkspacesStore()
 
     public private(set) var inspectorSelection: InspectorSelection?
     public var isInspectorPresented: Bool = false
@@ -67,11 +79,54 @@ public final class WorkspaceStore {
     // MARK: - Conversation Management
 
     /// 连接指定会话并开始消费事件流。
-    private func connectToConversation(id: String) async {
+    private func connectToConversation(_ conversation: ConversationRef) async {
+        // 已由 commitDraft 构建并连接好（首条消息路径）→ 不重复连接。
+        if activeConversationViewModel?.conversation?.id == conversation.id { return }
         let vm = ConversationViewModel(client: client)
-        let ref = ConversationRef(id: id)
-        await vm.connect(to: ref)
+        await vm.connect(to: conversation)
         activeConversationViewModel = vm
+    }
+
+    // MARK: - Draft lifecycle (P5.0)
+
+    /// 点击「+」：不调用任何 API，仅创建本地草稿。预选最近使用的工作区。
+    public func beginDraft() {
+        selectedConversation = nil          // 经 didSet 清掉活跃 VM
+        draft = SessionDraft(workspace: recentWorkspaces.mostRecent)
+    }
+
+    /// 在草稿中选择/切换工作区（仅草稿期可变）。
+    public func selectWorkspace(_ workspace: Workspace) {
+        guard draft != nil else { return }
+        draft?.workspace = workspace
+        draft?.state = .ready
+        recentWorkspaces.touch(workspace)
+    }
+
+    /// 放弃当前草稿。
+    public func cancelDraft() {
+        draft = nil
+    }
+
+    /// 提交草稿（发送首条消息）：创建真实 Session → 连接 → 发送首条消息 → 替换为活跃会话。
+    /// 这是唯一的 Session 创建点。失败时草稿进入 `.failed`，保留用户输入以便重试。
+    public func commitDraft(firstMessage: String) async {
+        guard let current = draft, let workspace = current.workspace else { return }
+        draft?.state = .committing
+        do {
+            let ref = try await client.createConversation(workspacePath: workspace.url.path)
+            let vm = ConversationViewModel(client: client, workspace: workspace)
+            await vm.connect(to: ref)
+            await vm.sendMessage(firstMessage)
+
+            // 草稿 → 真实会话
+            activeConversationViewModel = vm
+            listViewModel.prepend(ref)
+            selectedConversation = ref  // connectToConversation 守卫避免二次连接
+            draft = nil
+        } catch {
+            draft?.state = .failed(error.localizedDescription)
+        }
     }
 
     // MARK: - Inspector

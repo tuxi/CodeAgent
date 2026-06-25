@@ -9,12 +9,12 @@ import Foundation
 import CoreKit
 
 public enum AgentNavigationDestination: Hashable {
-    case conversationDetail(id: String)
+    case conversationDetail(conversation: ConversationRef)
     
     public var id: String {
         switch self {
-        case .conversationDetail(let id):
-            return "conversationDetail\(id)"
+        case .conversationDetail(let conversation):
+            return "conversationDetail\(conversation)"
         }
     }
 }
