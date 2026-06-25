@@ -2,27 +2,30 @@
 //  ArtifactNode.swift
 //  CodeAgentUI
 //
-//  Artifact 语义图的节点 — 一个 tool 执行产出的结构化投影。
-//  v4.3: 关系通过 ArtifactGraph.edges 表达，不再内嵌 relatedCallIDs。
+//  Work Product 语义图节点 — P4.4 升级为 work-product-centric 模型。
+//  三层结构：summary（Timeline 展示）→ path（元数据/导航）→ content（可滚动详情）。
 //
 
 import Foundation
 
 // MARK: - ArtifactNode
 
-/// 工具执行的语义副产物节点。
+/// 工具执行产生的 Work Product 节点。
 ///
-/// Identity = `callID`（协议级 tool identity），一个 tool 至多一个 ArtifactNode。
-/// 节点间关系由 `ArtifactGraph.edges` 管理，不内嵌于节点中。
+/// Identity = `callID`（协议级 tool identity）。
+/// 节点间关系由 `ArtifactGraph.edges` 管理。
 ///
-/// 对照：`ToolCallItem`（raw execution）→ `ArtifactNode`（semantic projection）。
+/// 三层信息结构（对照 Claude Code）：
+/// 1. `summary` — Timeline 显示，极短（如 "Edited file.swift +3 -1"）
+/// 2. `path` — 文件路径或命令，可导航/可点击
+/// 3. `content` — 可滚动详情（文件内容/diff/终端输出）
 public struct ArtifactNode: Identifiable, Sendable {
 
     // MARK: - Identity
 
     public var id: String { callID }
 
-    /// 协议级 tool 标识符，与 `ToolCallItem.callID` 一致。
+    /// 协议级 tool 标识符。
     public let callID: String
 
     /// 所属 turn 的协议标识符。
@@ -30,13 +33,18 @@ public struct ArtifactNode: Identifiable, Sendable {
 
     // MARK: - Type
 
-    /// Artifact 语义种类。
-    public let kind: ArtifactKind
+    /// Work Product 语义种类（P4.4: fileEdited/fileCreated/commandRun...）。
+    public let kind: WorkProductKind
 
-    /// 人类可读标题（如文件名、命令）。
-    public let title: String
+    // MARK: - Three-tier structure
 
-    /// 类型化内容 — v4 中 Artifact 是唯一的 UI 语义输出层。
+    /// Timeline 展示摘要（如 "Edited skill-model.md +1 -1"）。
+    public let summary: String
+
+    /// 文件路径或命令（可导航的元数据，不在滚动区域内）。
+    public let path: String?
+
+    /// 可滚动详情内容。
     public let content: ArtifactContent
 
     // MARK: - Init
@@ -44,14 +52,16 @@ public struct ArtifactNode: Identifiable, Sendable {
     public init(
         callID: String,
         turnID: String,
-        kind: ArtifactKind,
-        title: String,
+        kind: WorkProductKind,
+        summary: String,
+        path: String?,
         content: ArtifactContent
     ) {
         self.callID = callID
         self.turnID = turnID
         self.kind = kind
-        self.title = title
+        self.summary = summary
+        self.path = path
         self.content = content
     }
 }

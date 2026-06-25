@@ -26,16 +26,22 @@ public struct DiffPayload: Sendable {
     public let filePath: String?
     /// diff 内容（unified diff 或 patch 文本）。
     public let diffContent: String
+    /// 新增行数（从 diff 统计，P4.4 用于 summary 生成）。
+    public let addedLines: Int
+    /// 删除行数（从 diff 统计，P4.4 用于 summary 生成）。
+    public let removedLines: Int
 
-    public init(filePath: String?, diffContent: String) {
+    public init(filePath: String?, diffContent: String, addedLines: Int = 0, removedLines: Int = 0) {
         self.filePath = filePath
         self.diffContent = diffContent
+        self.addedLines = addedLines
+        self.removedLines = removedLines
     }
 }
 
 // MARK: - FilePayload
 
-/// 文件读取类工具的结构化产出。
+/// 文件读取/创建类工具的结构化产出。
 public struct FilePayload: Sendable {
     /// 文件路径。
     public let filePath: String
@@ -43,11 +49,14 @@ public struct FilePayload: Sendable {
     public let content: String
     /// 语言标识（如 "swift"、"python"），可缺省。
     public let language: String?
+    /// 是否为新建文件（P4.4: 用于区分 fileCreated vs fileRead）。
+    public let isNew: Bool
 
-    public init(filePath: String, content: String, language: String?) {
+    public init(filePath: String, content: String, language: String?, isNew: Bool = false) {
         self.filePath = filePath
         self.content = content
         self.language = language
+        self.isNew = isNew
     }
 }
 

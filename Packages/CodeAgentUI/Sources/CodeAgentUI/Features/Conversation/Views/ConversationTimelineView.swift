@@ -59,10 +59,10 @@ private struct TurnCardView: View {
                 ThinkingSection(thoughts: turn.thoughts, isExpanded: $thinkingExpanded)
             }
 
-            // ── 工具调用（v4.2.1: ToolArtifactPresenter = composition, not merge）──
+            // ── Work Product（P4.4: three-tier summary → path → content）──
             ForEach(turn.toolCallIDs, id: \.self) { callID in
                 if let item = turn.toolCalls[callID] {
-                    ToolArtifactPresenter(item: item, artifact: turn.artifactGraph.nodes[callID])
+                    WorkProductCard(item: item, artifact: turn.artifactGraph.nodes[callID])
                 }
             }
             // ── 审批请求 ──
@@ -171,37 +171,71 @@ private struct ThinkingSection: View {
     }
 }
 
-// MARK: - ToolArtifactPresenter (v4.2.1: UI composition layer)
+// MARK: - WorkProductCard (P4.4: three-tier layout)
 
-//  Design principle:
+//  Design principles:
 //  UI can MERGE DISPLAY, but must NOT MERGE DATA STRUCTURES.
-//  ToolCallItem and ArtifactNode remain independent models.
-//  This view is a pure composition/presenter — it joins, not owns.
+//  Three tiers: summary (Timeline) → path (metadata, non-scrollable) → content (scrollable).
+//  Modeled after Claude Code's Work Product visualization.
 
-/// 工具-Artifact 组合呈现器。
-/// 纯 layout 层：将 ToolCallItem（执行元信息）和 ArtifactNode（语义输出）
-/// 组合为一张卡片，但不耦合二者的数据模型。
-private struct ToolArtifactPresenter: View {
+/// Work Product 卡片 — P4.4 三层结构。
+/// 1. summary: Timeline 显示（如 "Edited file.swift +3 -1"），始终可见
+/// 2. path: 文件路径/命令，元数据行，不在滚动区
+/// 3. content: 可滚动详情
+private struct WorkProductCard: View {
     let item: ToolCallItem
     let artifact: ArtifactNode?
 
     @State private var expanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ToolHeaderView(
-                icon: headerIcon,
-                title: headerTitle,
-                isRunning: item.status == .running,
-                expanded: $expanded
-            )
+        VStack(alignment: .leading, spacing: 0) {
+            // ── Tier 1: Summary（Timeline 显示）──
+            Button {
+                withAnimation { expanded.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: headerIcon)
+                        .font(.caption)
+                    Text(headerTitle)
+                        .font(.caption.weight(.medium))
+                        .lineLimit(1)
+                    if item.status == .running {
+                        ProgressView()
+                            .scaleEffect(0.5)
+                            .frame(width: 12, height: 12)
+                    }
+                    Spacer()
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                        .font(.caption2)
+                }
+                .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
 
             if expanded {
+                Divider()
+                    .padding(.vertical, 4)
+
                 if let artifact {
-                    // Artifact 作为独立渲染单元内联展示
+                    // ── Tier 2: Path header（元数据，非滚动）──
+                    if let path = artifact.path, !path.isEmpty {
+                        HStack(spacing: 4) {
+                            Image(systemName: "folder")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                            Text(path)
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                            Spacer()
+                        }
+                        .padding(.bottom, 4)
+                    }
+
+                    // ── Tier 3: Scrollable content ──
                     ArtifactBodyView(artifact: artifact)
                 } else {
-                    // 非 artifact 工具：展示 args + error
                     ToolFallbackView(item: item)
                 }
             }
@@ -211,63 +245,37 @@ private struct ToolArtifactPresenter: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
+    // MARK: - Header
+
+    /// Timeline 显示：优先 artifact.summary，否则 toolName。
     private var headerTitle: String {
-        item.toolName + ":" + (artifact?.title ?? "")
+        if let summary = artifact?.summary, !summary.isEmpty {
+            return summary
+        }
+        return item.toolName
     }
 
     private var headerIcon: String {
         if let a = artifact {
             switch a.kind {
-            case .diff: return "arrow.triangle.swap"
-            case .file: return "doc.text"
-            case .terminal: return "terminal"
+            case .fileRead:     return "doc.text"
+            case .fileCreated:  return "doc.badge.plus"
+            case .fileEdited:   return "arrow.triangle.swap"
+            case .commandRun:   return "terminal"
+            case .searchResult: return "magnifyingglass"
             }
         }
         switch item.status {
-        case .running: return "hourglass"
+        case .running:   return "hourglass"
         case .completed: return "checkmark.circle"
-        case .failed: return "xmark.circle"
+        case .failed:    return "xmark.circle"
         }
-    }
-}
-
-// MARK: - ToolHeaderView（可复用）
-
-/// 工具/Artifact 卡片标题行 — 纯展示组件。
-private struct ToolHeaderView: View {
-    let icon: String
-    let title: String
-    let isRunning: Bool
-    @Binding var expanded: Bool
-
-    var body: some View {
-        Button {
-            withAnimation { expanded.toggle() }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.caption)
-                Text(title)
-                    .font(.caption.monospaced().weight(.medium))
-                    .lineLimit(1)
-                if isRunning {
-                    ProgressView()
-                        .scaleEffect(0.5)
-                        .frame(width: 12, height: 12)
-                }
-                Spacer()
-                Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                    .font(.caption2)
-            }
-            .foregroundStyle(.secondary)
-        }
-        .buttonStyle(.plain)
     }
 }
 
 // MARK: - ArtifactBodyView（独立渲染单元）
 
-/// Artifact 内容渲染 — 独立于 ToolCard，可单独复用。
+/// Artifact 内容渲染 — 独立于 WorkProductCard，可单独复用。
 private struct ArtifactBodyView: View {
     let artifact: ArtifactNode
 

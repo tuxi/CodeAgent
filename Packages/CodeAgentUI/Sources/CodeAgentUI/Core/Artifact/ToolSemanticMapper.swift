@@ -2,221 +2,276 @@
 //  ToolSemanticMapper.swift
 //  CodeAgentUI
 //
-//  Domain-layer semantic mapper — 将 raw ToolCallItem 映射为 ArtifactNode。
-//  纯函数、无状态、无 UI 依赖。Metadata First + Observation Fallback 策略。
-//
-//  架构位置：ConversationState reducer → ToolSemanticMapper → ArtifactNode
-//  对照：`ToolCallItem`（raw execution）→ `ArtifactNode`（semantic projection）。
+//  P4.4: Semantic compiler — 将 raw ToolCallItem 编译为 Work Product。
+//  Metadata First + Observation Fallback。
+//  输出三层结构：summary（Timeline）→ path（元数据）→ content（详情）。
 //
 
 import Foundation
 import CoreKit
 
-// MARK: - ToolSemanticMapper
+// MARK: - ToolSemanticCompiler
 
-/// 工具执行的语义映射器。
-/// 从 `ToolCallItem` 的 toolName + toolArgs + observation 中提取结构化 Artifact。
+/// 工具执行的语义编译器。
+/// 从 `ToolCallItem` 编译 `ArtifactNode`（Work Product）— 唯一语义输出。
 public struct ToolSemanticCompiler {
 
-    /// 将一个已完成的 `ToolCallItem` 映射为可选的 `ArtifactNode`。
-    /// - Parameters:
-    ///   - tool: 已完成的工具调用项（须含 result）。
-    ///   - turnID: 所属 turn 的协议标识符。
-    /// - Returns: 语义映射后的 ArtifactNode；非 artifact 类工具返回 nil。
+    /// 编译 Work Product。
     public static func compile(_ tool: ToolCallItem, turnID: String) -> ArtifactNode? {
         guard tool.status == .completed || tool.status == .failed else { return nil }
         guard let kind = determineKind(toolName: tool.toolName) else { return nil }
 
-        let title = extractTitle(tool: tool, kind: kind)
+        let path = extractFilePath(from: tool)
         let content = buildContent(tool: tool, kind: kind)
-
         guard let content else { return nil }
+
+        let summary = generateSummary(kind: kind, path: path, content: content, tool: tool)
 
         return ArtifactNode(
             callID: tool.callID,
             turnID: turnID,
             kind: kind,
-            title: title,
+            summary: summary,
+            path: path,
             content: content
         )
     }
 
-    // MARK: - Kind determination (Metadata First)
+    // MARK: - Kind determination → WorkProductKind
 
-    private static func determineKind(toolName: String) -> ArtifactKind? {
+    private static func determineKind(toolName: String) -> WorkProductKind? {
         let name = toolName.lowercased()
 
-        // Diff / patch / edit tools
-        let diffPatterns = ["write", "edit", "patch", "diff", "apply", "create", "save"]
-        for p in diffPatterns where name.contains(p) {
-            return .diff
+        // Write / edit / create → fileEdited (default), may refine later
+        let writePatterns = ["write", "edit", "patch", "apply", "save"]
+        for p in writePatterns where name.contains(p) {
+            return .fileEdited
         }
 
-        // File read / view tools
-        let filePatterns = ["read", "cat", "view", "open", "get", "list"]
-        for p in filePatterns where name.contains(p) {
-            return .file
+        // Create / new → fileCreated
+        let createPatterns = ["create", "new"]
+        for p in createPatterns where name.contains(p) {
+            return .fileCreated
         }
 
-        // Terminal / shell tools
+        // Read / view → fileRead
+        let readPatterns = ["read", "cat", "view", "open", "get", "list"]
+        for p in readPatterns where name.contains(p) {
+            return .fileRead
+        }
+
+        // Terminal → commandRun
         let termPatterns = ["bash", "shell", "exec", "terminal", "run", "cmd"]
         for p in termPatterns where name.contains(p) {
-            return .terminal
+            return .commandRun
+        }
+
+        // Search / grep / find → searchResult
+        let searchPatterns = ["search", "grep", "find", "locate", "rg", "ag"]
+        for p in searchPatterns where name.contains(p) {
+            return .searchResult
         }
 
         return nil
     }
 
-    // MARK: - Title extraction
+    // MARK: - Summary generation
 
-    private static func extractTitle(tool: ToolCallItem, kind: ArtifactKind) -> String {
-        switch kind {
-        case .diff, .file:
-            return extractFilePath(from: tool) ?? tool.toolName
-        case .terminal:
-            return extractCommand(from: tool) ?? tool.toolName
+    private static func generateSummary(
+        kind: WorkProductKind,
+        path: String?,
+        content: ArtifactContent,
+        tool: ToolCallItem
+    ) -> String {
+        let fileName = path.map { ($0 as NSString).lastPathComponent } ?? "file"
+
+        switch (kind, content) {
+        case (.fileRead, .file(let p)):
+            let lines = p.content.components(separatedBy: "\n").count
+            return "Read \(fileName) (\(lines) lines)"
+
+        case (.fileCreated, .file(let p)):
+            let lines = p.content.components(separatedBy: "\n").count
+            return "Created \(fileName) (\(lines) lines)"
+
+        case (.fileEdited, .diff(let p)):
+            let added = p.addedLines
+            let removed = p.removedLines
+            var parts: [String] = []
+            if added > 0 { parts.append("+\(added)") }
+            if removed > 0 { parts.append("-\(removed)") }
+            let delta = parts.isEmpty ? "" : " \(parts.joined(separator: " "))"
+            return "Edited \(fileName)\(delta)"
+
+        case (.fileEdited, .file(let p)):
+            let lines = p.content.components(separatedBy: "\n").count
+            return "Edited \(fileName) (\(lines) lines)"
+
+        case (.commandRun, .terminal(let p)):
+            let cmd = p.command
+            let shortCmd = cmd.count > 40 ? String(cmd.prefix(40)) + "…" : cmd
+            if let code = p.exitCode, code != 0 {
+                return "Ran \(shortCmd) (exit \(code))"
+            }
+            return "Ran \(shortCmd)"
+
+        case (.searchResult, _):
+            let query = extractSearchQuery(from: tool) ?? "search"
+            return "Search: \(query)"
+
+        default:
+            return tool.toolName
         }
     }
 
-    // MARK: - Content construction (Metadata First + Observation Fallback)
+    // MARK: - Content construction
 
-    private static func buildContent(tool: ToolCallItem, kind: ArtifactKind) -> ArtifactContent? {
+    private static func buildContent(tool: ToolCallItem, kind: WorkProductKind) -> ArtifactContent? {
         switch kind {
-        case .diff:
-            return buildDiffContent(tool)
-        case .file:
-            return buildFileContent(tool)
-        case .terminal:
+        case .fileEdited:
+            // Prefer diff payload if observation looks like a diff
+            let obs = tool.result?.observation ?? ""
+            if obs.contains("@@") && (obs.contains("+") || obs.contains("-")) {
+                return buildDiffContent(tool)
+            }
+            return buildFileContent(tool, isNew: false)
+
+        case .fileCreated:
+            return buildFileContent(tool, isNew: true)
+
+        case .fileRead:
+            return buildFileContent(tool, isNew: false)
+
+        case .commandRun:
             return buildTerminalContent(tool)
+
+        case .searchResult:
+            // Search results rendered as file-like content for now
+            return buildFileContent(tool, isNew: false)
         }
     }
 
-    // MARK: Diff
+    // MARK: - Content builders
 
     private static func buildDiffContent(_ tool: ToolCallItem) -> ArtifactContent? {
         let filePath = extractFilePath(from: tool)
-        // Primary: observation as diff content
         let diffContent = tool.result?.observation ?? ""
-        return .diff(DiffPayload(filePath: filePath, diffContent: diffContent))
+        let (added, removed) = countDiffLines(diffContent)
+        return .diff(DiffPayload(
+            filePath: filePath,
+            diffContent: diffContent,
+            addedLines: added,
+            removedLines: removed
+        ))
     }
 
-    // MARK: File
-
-    private static func buildFileContent(_ tool: ToolCallItem) -> ArtifactContent? {
+    private static func buildFileContent(_ tool: ToolCallItem, isNew: Bool) -> ArtifactContent? {
         let filePath = extractFilePath(from: tool) ?? "unknown"
-        // Primary: observation as file content
         let content = tool.result?.observation ?? ""
-        // Language: args first, then infer from extension
         let language = extractLanguage(from: tool, filePath: filePath)
-        return .file(FilePayload(filePath: filePath, content: content, language: language))
+        return .file(FilePayload(
+            filePath: filePath,
+            content: content,
+            language: language,
+            isNew: isNew
+        ))
     }
-
-    // MARK: Terminal
 
     private static func buildTerminalContent(_ tool: ToolCallItem) -> ArtifactContent? {
         let command = extractCommand(from: tool) ?? "unknown"
-        // Primary: observation as terminal output
         let output = tool.result?.observation ?? ""
         let exitCode = extractExitCode(from: tool)
         return .terminal(TerminalPayload(command: command, output: output, exitCode: exitCode))
     }
 
-    // MARK: - Field extractors (args → observation fallback)
+    // MARK: - Diff line counting
 
-    /// 提取文件路径：toolArgs 优先，observation 降级。
-    private static func extractFilePath(from tool: ToolCallItem) -> String? {
-        // Primary: toolArgs structured fields
-        if let args = tool.toolArgs {
-            let path = args["file_path"].stringValue
-            if !path.isEmpty { return path }
-            let altPath = args["path"].stringValue
-            if !altPath.isEmpty { return altPath }
-            let file = args["file"].stringValue
-            if !file.isEmpty { return file }
+    private static func countDiffLines(_ diff: String) -> (added: Int, removed: Int) {
+        var added = 0
+        var removed = 0
+        for line in diff.components(separatedBy: "\n") {
+            if line.hasPrefix("+") && !line.hasPrefix("+++") { added += 1 }
+            else if line.hasPrefix("-") && !line.hasPrefix("---") { removed += 1 }
         }
+        return (added, removed)
+    }
 
-        // Fallback: parse from observation (common patterns like "--- a/path" or "+++ b/path")
+    // MARK: - Field extractors
+
+    private static func extractFilePath(from tool: ToolCallItem) -> String? {
+        if let args = tool.toolArgs {
+            for key in ["file_path", "path", "file", "target"] {
+                let v = args[key].stringValue
+                if !v.isEmpty { return v }
+            }
+        }
         if let obs = tool.result?.observation {
             return parseFilePathFromObservation(obs)
         }
-
         return nil
     }
 
-    /// 提取命令：toolArgs 优先，observation 降级。
     private static func extractCommand(from tool: ToolCallItem) -> String? {
-        // Primary: toolArgs
         if let args = tool.toolArgs {
-            let cmd = args["command"].stringValue
-            if !cmd.isEmpty { return cmd }
-            let altCmd = args["cmd"].stringValue
-            if !altCmd.isEmpty { return altCmd }
+            for key in ["command", "cmd"] {
+                let v = args[key].stringValue
+                if !v.isEmpty { return v }
+            }
         }
-
-        // Fallback: parse from observation
         if let obs = tool.result?.observation {
             return parseCommandFromObservation(obs)
         }
-
         return nil
     }
 
-    /// 提取语言：args 优先，文件扩展名推断。
+    private static func extractSearchQuery(from tool: ToolCallItem) -> String? {
+        if let args = tool.toolArgs {
+            for key in ["query", "q", "pattern", "search"] {
+                let v = args[key].stringValue
+                if !v.isEmpty { return v }
+            }
+        }
+        return nil
+    }
+
     private static func extractLanguage(from tool: ToolCallItem, filePath: String) -> String? {
-        // Primary: toolArgs
         if let args = tool.toolArgs {
             let lang = args["language"].stringValue
             if !lang.isEmpty { return lang }
         }
-
-        // Fallback: infer from file extension
         return inferLanguage(from: filePath)
     }
 
-    /// 提取退出码：从 observation 中解析。
     private static func extractExitCode(from tool: ToolCallItem) -> Int? {
-        // Primary: toolArgs
         if let args = tool.toolArgs {
             let code = args["exit_code"].intValue
             if code != 0 || args["exit_code"].stringValue == "0" { return code }
         }
-
-        // Fallback: parse from observation
         if let obs = tool.result?.observation {
             return parseExitCodeFromObservation(obs)
         }
-
         return nil
     }
 
     // MARK: - Observation fallback parsers
 
     private static func parseFilePathFromObservation(_ obs: String) -> String? {
-        // Match common diff/patch path patterns
         let patterns = [
-            #"^\+\+\+ b/(.+)$"#,         // "+++ b/path/to/file.swift"
-            #"^--- a/(.+)$"#,             // "--- a/path/to/file.swift"
-            #"^(?:File|Path):\s*(.+)$"#,  // "File: path/to/file.swift"
-            #"^#+\s*(.+\.\w+)"#,          // "## path/to/file.swift"
+            #"^\+\+\+ b/(.+)$"#,
+            #"^--- a/(.+)$"#,
+            #"^(?:File|Path):\s*(.+)$"#,
+            #"^#+\s*(.+\.\w+)"#,
         ]
         for pattern in patterns {
-            if let match = obs.firstMatch(for: pattern) {
-                return match
-            }
+            if let match = obs.firstMatch(for: pattern) { return match }
         }
         return nil
     }
 
     private static func parseCommandFromObservation(_ obs: String) -> String? {
-        // Match "$ command" pattern
-        if let match = obs.firstMatch(for: #"^\$\s+(.+)$"#) {
-            return match
-        }
-        // Use first non-empty line as command
+        if let match = obs.firstMatch(for: #"^\$\s+(.+)$"#) { return match }
         let firstLine = obs.components(separatedBy: "\n").first?.trimmingCharacters(in: .whitespaces)
-        if let line = firstLine, !line.isEmpty, line.count < 200 {
-            return line
-        }
+        if let line = firstLine, !line.isEmpty, line.count < 200 { return line }
         return nil
     }
 
@@ -227,9 +282,7 @@ public struct ToolSemanticCompiler {
             #"\[exit[:\s]*(\d+)\]"#,
         ]
         for pattern in patterns {
-            if let match = obs.firstMatch(for: pattern) {
-                return Int(match)
-            }
+            if let match = obs.firstMatch(for: pattern) { return Int(match) }
         }
         return nil
     }
