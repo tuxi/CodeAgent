@@ -247,10 +247,10 @@ private struct WorkProductCard: View {
 
     // MARK: - Header
 
-    /// Timeline 显示：优先 artifact.summary，否则 toolName。
+    /// Timeline 显示：运行时生成 summary，否则 toolName。
     private var headerTitle: String {
-        if let summary = artifact?.summary, !summary.isEmpty {
-            return summary
+        if let a = artifact {
+            return SummaryRenderer.summary(for: a)
         }
         return item.toolName
     }
@@ -262,7 +262,6 @@ private struct WorkProductCard: View {
             case .fileCreated:  return "doc.badge.plus"
             case .fileEdited:   return "arrow.triangle.swap"
             case .commandRun:   return "terminal"
-            case .searchResult: return "magnifyingglass"
             }
         }
         switch item.status {

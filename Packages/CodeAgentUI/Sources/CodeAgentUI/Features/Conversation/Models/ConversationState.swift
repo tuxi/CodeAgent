@@ -399,10 +399,6 @@ extension ConversationState {
 
     /// 从 ArtifactNode 提取被引用的文件路径（用于边构建匹配）。
     private func extractReferencedPath(from node: ArtifactNode) -> String? {
-        switch node.content {
-        case .diff(let p):  return p.filePath
-        case .file(let p):  return p.filePath
-        case .terminal:     return nil
-        }
+        node.path
     }
 }

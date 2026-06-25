@@ -21,6 +21,4 @@ public enum WorkProductKind: String, Sendable, CaseIterable {
     case fileEdited
     /// 终端命令执行
     case commandRun
-    /// 搜索结果（grep/find 等）
-    case searchResult
 }
