@@ -8,20 +8,15 @@
 #if os(macOS)
 
 import SwiftUI
+import CodeAgentUI
+import CoreKit
 
 struct CodeAgentRootView: View {
-    
-    @State private var selection: InspectorSelection?
-    
+
+    @Environment(AppContainer.self) private var container
+
     var body: some View {
-        NavigationSplitView {
-            SidebarView()
-        } content: {
-            ConversationTimelineView(selection: $selection)
-        } detail: {
-            InspectorView(selection: selection)
-        }
-        .navigationSplitViewStyle(.balanced)
+        WorkspaceView(dependencies: container.makeAgentDependencies())
     }
 }
 

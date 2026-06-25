@@ -8,11 +8,14 @@
 #if os(iOS)
 
 import SwiftUI
+import CodeAgentUI
 
 struct CodeAgentRootView: View {
-    
+
+    @Environment(AppContainer.self) private var container
+
     var body: some View {
-        
+        WorkspaceView(dependencies: container.makeAgentDependencies())
     }
 }
 
