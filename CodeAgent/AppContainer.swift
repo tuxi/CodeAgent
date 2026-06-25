@@ -33,15 +33,8 @@ final class AppContainer {
         self.wsClient = wsClient
     }
     
-    func makeAgentClient() -> AgentClient {
-        let mainConfig = NetworkConfig(
-            interceptor: nil,
-            baseURL: URL(string: "http://localhost:8787")!,
-            commonHeaders: [:]
-        )
-        let apiProvider = ApiProvider(config: mainConfig)
-        
-        return DefaultAgentClient(provider: apiProvider, wsClient: wsClient)
+    func makeAgentClient() -> RuntimeClient {
+        return DefaultAgentClient()
     }
     
     func makeAgentDependencies() -> AgentDependencies {
