@@ -8,7 +8,6 @@
 //
 
 import SwiftUI
-import AppKit
 
 // MARK: - SyntaxHighlighter
 
