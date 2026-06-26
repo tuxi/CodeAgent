@@ -37,6 +37,17 @@ public struct ChronologicalTimelineView: View {
                             .id(presentation.id)
                     }
 
+                    // Model stats bar (token usage + timing)
+                    if let stats = snapshot.modelStats {
+                        HStack(spacing: 8) {
+                            Label("\(stats.formattedTokens) tokens", systemImage: "text.word.spacing")
+                            Label(stats.formattedElapsed, systemImage: "clock")
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .padding(.top, 4)
+                    }
+
                     // Streaming indicator when live and no explicit streaming nodes
                     if snapshot.isLive, let last = snapshot.timeline.last {
                         let hasStreaming = isNodeStreaming(last)

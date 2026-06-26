@@ -17,22 +17,48 @@ public struct RuntimeSnapshot: Sendable {
     public let timeline: [ExecutionNode]
     public let pendingApproval: ApprovalRequest?
     public let latestTodos: [TodoItem]
+    /// Token & timing from the most recent model_finished event.
+    public let modelStats: ModelStats?
     public let isLive: Bool
 
     public init(graph: ExecutionGraph, timeline: [ExecutionNode],
                 pendingApproval: ApprovalRequest? = nil,
                 latestTodos: [TodoItem] = [],
+                modelStats: ModelStats? = nil,
                 isLive: Bool = false) {
         self.graph = graph
         self.timeline = timeline
         self.pendingApproval = pendingApproval
         self.latestTodos = latestTodos
+        self.modelStats = modelStats
         self.isLive = isLive
     }
 
     /// Empty snapshot for initial state.
     public static func empty(sessionID: String) -> RuntimeSnapshot {
         RuntimeSnapshot(graph: ExecutionGraph(), timeline: [])
+    }
+}
+
+/// Token & timing statistics from a model invocation.
+public struct ModelStats: Sendable {
+    public let promptTokens: Int
+    public let elapsedMs: Int
+
+    public var formattedTokens: String {
+        if promptTokens >= 1000 {
+            String(format: "%.1fK", Double(promptTokens) / 1000.0)
+        } else {
+            "\(promptTokens)"
+        }
+    }
+
+    public var formattedElapsed: String {
+        if elapsedMs >= 1000 {
+            String(format: "%.1fs", Double(elapsedMs) / 1000.0)
+        } else {
+            "\(elapsedMs)ms"
+        }
     }
 }
 
@@ -62,6 +88,9 @@ public actor RuntimeEngine {
 
     /// Latest todo list from the agent.
     private var _latestTodos: [TodoItem] = []
+
+    /// Stats from the most recent model_finished event.
+    private var _modelStats: ModelStats?
 
     /// Whether the live WebSocket is connected.
     private var isLive: Bool = false
@@ -96,9 +125,16 @@ public actor RuntimeEngine {
         if case .todoUpdated(_, let todos) = event {
             _latestTodos = todos
         }
-        // Clear pending approval on turn boundary
+        // Track model stats from model_finished
+        if case .modelFinished(_, let promptTokens, let elapsedMs, _) = event {
+            if let tokens = promptTokens, let ms = elapsedMs, tokens > 0 || ms > 0 {
+                _modelStats = ModelStats(promptTokens: tokens, elapsedMs: ms)
+            }
+        }
+        // Clear per-turn state on turn boundary
         if case .turnStarted = event {
             _pendingApproval = nil
+            _modelStats = nil
         }
 
         // Reduce into graph
@@ -175,6 +211,7 @@ public actor RuntimeEngine {
             timeline: timeline,
             pendingApproval: _pendingApproval,
             latestTodos: _latestTodos,
+            modelStats: _modelStats,
             isLive: isLive
         )
     }
