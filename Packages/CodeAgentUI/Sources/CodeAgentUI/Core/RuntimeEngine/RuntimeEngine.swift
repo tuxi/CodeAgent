@@ -178,7 +178,7 @@ public actor RuntimeEngine {
         pendingFlush = true
         flushTask?.cancel()
         flushTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms debounce
+            try? await Task.sleep(nanoseconds: 16_000_000) // 16ms ≈ 60fps debounce
             guard let self, await self.pendingFlush else { return }
             await self.yieldSnapshot()
         }

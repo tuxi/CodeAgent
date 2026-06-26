@@ -137,3 +137,97 @@ codeagent serve
 # 构建 macOS 客户端
 xcodebuild -scheme CodeAgent -sdk macosx -destination 'platform=macOS' build
 ```
+
+## 实现路线图
+
+对标 Claude Code / Cursor，差距分四层。每层标注客户端/服务端责任边界。
+
+### L1：渲染质量
+
+> 影响：视觉质感 + 阅读体验。纯客户端改动。
+
+| 差距 | 目标 | 状态 |
+|------|------|------|
+| **Markdown 渲染** | 最终答案和思考文本渲染 Markdown：标题、粗斜体、行内代码、列表、引用、链接 | 🔲 待实现 |
+| **代码块高亮** | 深色背景 + Swift/SwiftUI 语法高亮 + 语言标签 + 一键复制按钮 | 🔲 待实现 |
+| **流式体感** | 逐 token 或小 chunk 渲染（当前 50ms 合并 → 降到 16ms），光标平滑闪烁动画 | 🔲 待实现 |
+| **Diff 内联预览** | 绿色/红色 diff 直接在对话卡片中展示，不需打开右侧 Inspector | 🔲 待实现 |
+
+**实现方案**：
+- Markdown：macOS 15 `AttributedString` 原生 Markdown 解析 + 手动 AttributedString 构造（代码块部分）。零外部依赖。
+- 语法高亮：内置 `SyntaxHighlighter`，支持 Swift / Python / Bash / JSON / YAML / JS / TypeScript / Go 语言的 tokenization + 着色。
+- 流式：`MergePolicy` 新增 `StreamingMergePolicy`（16ms debounce），光标 `Text("|").opacity(blinkAnimation)`。
+- Diff：`ToolCard` 展开时内联渲染 diff（复用已有的 `DiffPayload` 结构）。
+
+### L2：Tool 过程可视化
+
+> 影响：用户信赖度。需要服务端新增事件类型。
+
+| 差距 | 目标 | 状态 |
+|------|------|------|
+| **长命令实时输出** | `bash`/`shell` 工具执行时，stdout/stderr 逐行流式推送到 UI | 🔲 需服务端 `tool_stdout` / `tool_stderr` 事件 |
+| **Tool 耗时标注** | 每个工具卡片底部显示 "⏱ 1.2s" | 🔲 客户端就绪，需服务端 `tool_finished.elapsed_ms` |
+| **文件变更摘要** | 编辑/创建文件后显示 "+23 -5 lines in main.swift" 摘要行 | 🔲 客户端就绪（`DiffPayload` 已有 addedLines/removedLines） |
+
+**当前服务端协议限制**：v1 协议只有一个 `tool_finished` 事件包含完整 output。长命令（如 `npm install`）执行期间 UI 无反馈。详见 [agent-wire v1 协议](docs/client_integration_v1.md)。
+
+**需要服务端新增**（v2 wire 协议提案）：
+```
+事件: tool_stdout  { call_id, chunk }   — 工具执行中逐行输出
+事件: tool_stderr  { call_id, chunk }   — 工具执行中 stderr 输出
+字段: tool_finished.elapsed_ms           — 工具执行耗时
+```
+
+### L3：上下文感知
+
+> 影响：用户对 agent 状态的理解。客户端 + 服务端配合。
+
+| 差距 | 目标 | 状态 |
+|------|------|------|
+| **Todo 地位强化** | Todo 列表置顶或侧边固定，带进度条 (2/5)，不埋在 timeline 里 | 🔲 待实现 |
+| **文件上下文指示** | 当前 turn 读取/编辑了哪些文件，显示在工作区芯片旁 | 🔲 待实现 |
+| **Token 用量** | Turn 底部或侧边显示 "📊 12K / 200K tokens" | 🔲 服务端 `model_finished` 已有，客户端未展示 |
+| **工作区状态** | 分支名 + 未暂存文件数，显示在输入框上方 | 🔲 待实现 |
+
+**实现方案**：
+- Todo：`TodoPanel` 固定在 timeline 右侧（macOS `.inspector` 的第二 tab，或 timeline 顶部的 sticky bar）。
+- 文件上下文：从当前 turn 的 `ArtifactGraph` 提取所有 `path`，去重后渲染为 `WorkspaceChipBar` 中的 tag。
+- Token 用量：在 turn 结束时从 `model_finished` 事件提取 `promptTokens`，渲染为 mini indicator。
+
+### L4：交互效率
+
+> 影响：高级用户效率。纯客户端改动。
+
+| 差距 | 目标 | 状态 |
+|------|------|------|
+| **快捷键** | `⌘K` 命令面板（清空对话 / 切换工作区 / 导出 / 设置） | 🔲 待实现 |
+| **附件拖拽** | 拖入文件/图片到输入框，自动形成 `@file path` 引用 | 🔲 待实现 |
+| **消息操作** | 每条用户消息可编辑重发、每条 assistant 消息可复制/重新生成 | 🔲 待实现 |
+| **历史搜索** | `⌘F` 在对话历史中搜索文本 | 🔲 待实现 |
+
+### 实施顺序
+
+```
+当前 ──────────────────────────────────────────────→ 目标
+
+L1: Markdown 渲染 ──── 代码高亮 ──── 流式体感 ──── Diff 内联
+  │                    (客户端独立完成)
+  │
+L2: 服务端 stdout ──── 耗时标注 ──── 文件变更摘要
+  │  (需服务端配合)
+  │
+L3: Todo 强化 ──── 文件上下文 ──── Token 指示
+  │
+  │
+L4: 快捷键 ──── 拖拽 ──── 消息操作
+```
+
+### 当前优先级
+
+**P0 — 本周**：L1 Markdown 渲染 + 代码高亮 + 流式优化。不依赖服务端，做完后 agent 感显著提升。
+
+**P1 — 服务端就绪后**：L2 长命令实时输出 + 耗时标注。依赖服务端新增 `tool_stdout`/`tool_stderr` 事件。
+
+**P2 — P1 之后**：L3 Todo 强化 + 文件上下文。
+
+**P3 — 后续迭代**：L4 快捷键 + 交互增强。

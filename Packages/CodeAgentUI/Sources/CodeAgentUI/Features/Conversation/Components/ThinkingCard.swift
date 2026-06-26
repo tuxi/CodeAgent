@@ -43,12 +43,10 @@ struct ThinkingCard: View {
                 }
 
                 // Body — always visible, italic for narrative feel
-                Text(text)
+                MarkdownRenderer(text: text)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .italic()
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
             }
             .padding(.leading, 10)
             .padding(.trailing, 12)

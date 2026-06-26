@@ -28,20 +28,32 @@ struct MessageBubble: View {
 
             if role == .user { Spacer() }
 
-            Text(text + (isStreaming ? "|" : ""))
-                .font(.body)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background {
-                    if role == .user {
-                        Color.accentColor
-                    } else {
-                        Color(nsColor: .quaternaryLabelColor)
+            Group {
+                if role == .assistant {
+                    // Rich Markdown rendering for assistant messages
+                    VStack(alignment: .leading, spacing: 4) {
+                        MarkdownRenderer(text: text)
+                        if isStreaming {
+                            BlinkingCursor()
+                        }
                     }
+                } else {
+                    // User messages stay plain text
+                    Text(text)
+                        .font(.body)
+                        .foregroundStyle(.white)
                 }
-                .foregroundStyle(role == .user ? .white : .primary)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .textSelection(.enabled)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background {
+                if role == .user {
+                    Color.accentColor
+                } else {
+                    Color.clear
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12))
 
             if role == .assistant { Spacer() }
 
@@ -56,6 +68,25 @@ struct MessageBubble: View {
             }
         }
         .padding(.horizontal, 4)
+    }
+}
+
+// MARK: - BlinkingCursor
+
+/// Smooth blinking cursor for streaming text.
+struct BlinkingCursor: View {
+    @State private var opacity: Double = 1
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.accentColor)
+            .frame(width: 2, height: 16)
+            .opacity(opacity)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
+                    opacity = 0.2
+                }
+            }
     }
 }
 
