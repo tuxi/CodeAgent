@@ -94,27 +94,34 @@ struct ToolCard: View {
                         .textSelection(.enabled)
                 }
 
-                // Artifact → Inspector link
+                // Artifact
                 if let artifact = tool.artifact {
                     Divider()
                         .padding(.vertical, 2)
-                    Button {
-                        openInInspector(artifact)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: artifactIcon(for: artifact))
-                                .font(.caption2)
-                            Text(SummaryRenderer.summary(for: artifact))
-                                .font(.caption2)
-                                .foregroundStyle(.blue)
-                                .lineLimit(1)
-                            Spacer()
-                            Image(systemName: "arrow.up.forward.app")
-                                .font(.caption2)
-                                .foregroundStyle(.blue)
+
+                    // Diff artifacts: render inline with green/red coloring
+                    if case .diff(let diffPayload) = artifact.content {
+                        DiffInlineView(diff: diffPayload, artifact: artifact, store: store)
+                    } else {
+                        // File/terminal artifacts: Inspector link
+                        Button {
+                            openInInspector(artifact)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: artifactIcon(for: artifact))
+                                    .font(.caption2)
+                                Text(SummaryRenderer.summary(for: artifact))
+                                    .font(.caption2)
+                                    .foregroundStyle(.blue)
+                                    .lineLimit(1)
+                                Spacer()
+                                Image(systemName: "arrow.up.forward.app")
+                                    .font(.caption2)
+                                    .foregroundStyle(.blue)
+                            }
                         }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -165,5 +172,106 @@ struct ToolCard: View {
         case .terminal(let payload):
             store.showInspector(.terminal(payload))
         }
+    }
+}
+
+// MARK: - DiffInlineView
+
+/// Renders unified diff lines in place — green for additions, red for removals.
+/// Avoids requiring the user to open the right-side Inspector for quick diffs.
+private struct DiffInlineView: View {
+    let diff: DiffPayload
+    let artifact: ArtifactNode
+    let store: WorkspaceStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // Summary header with Inspector link
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.triangle.swap")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                Text(SummaryRenderer.summary(for: artifact))
+                    .font(.caption2.weight(.medium))
+
+                Spacer()
+
+                Button {
+                    store.showInspector(.diff(diff))
+                } label: {
+                    HStack(spacing: 2) {
+                        Text("Full diff")
+                            .font(.caption2)
+                        Image(systemName: "arrow.up.forward.app")
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(.blue)
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Diff stats
+            HStack(spacing: 8) {
+                if diff.addedLines > 0 {
+                    Label("+\(diff.addedLines)", systemImage: "plus.circle")
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                }
+                if diff.removedLines > 0 {
+                    Label("-\(diff.removedLines)", systemImage: "minus.circle")
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                }
+                Spacer()
+            }
+
+            // Inline diff content — green/red per line
+            ScrollView(.horizontal, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(diffLines.enumerated()), id: \.offset) { _, line in
+                        DiffLineView(line: line)
+                    }
+                }
+            }
+            .frame(maxHeight: 200)
+            .background(Color(nsColor: .textBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(.secondary.opacity(0.15), lineWidth: 1)
+            )
+        }
+    }
+
+    private var diffLines: [String] {
+        diff.diffContent.components(separatedBy: "\n")
+    }
+}
+
+/// Single line in a diff view — colored by type.
+private struct DiffLineView: View {
+    let line: String
+
+    private var style: (color: Color, bg: Color) {
+        if line.hasPrefix("+") && !line.hasPrefix("+++") {
+            return (.green, .green.opacity(0.08))
+        } else if line.hasPrefix("-") && !line.hasPrefix("---") {
+            return (.red, .red.opacity(0.08))
+        } else if line.hasPrefix("@@") {
+            return (.blue, .blue.opacity(0.06))
+        } else {
+            return (.secondary, .clear)
+        }
+    }
+
+    var body: some View {
+        Text(line)
+            .font(.system(size: 11, design: .monospaced))
+            .foregroundStyle(style.color)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 0.5)
+            .background(style.bg)
     }
 }

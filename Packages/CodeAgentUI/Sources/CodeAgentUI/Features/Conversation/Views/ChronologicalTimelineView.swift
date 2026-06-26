@@ -25,6 +25,13 @@ public struct ChronologicalTimelineView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 6) {
+                    // Sticky todo panel — shows agent's current task plan
+                    if !snapshot.latestTodos.isEmpty {
+                        TodoPanel(todos: snapshot.latestTodos)
+                            .id("todo_panel")
+                            .padding(.bottom, 6)
+                    }
+
                     ForEach(presentations) { presentation in
                         ExecutionNodeCardView(presentation: presentation)
                             .id(presentation.id)

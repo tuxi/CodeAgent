@@ -96,7 +96,7 @@ public struct ConversationDetailView: View {
             ConversationTimelineView(viewModel: vm)
 
             // ── 审批拦截栏（阻断 input pipeline）──
-            if let approval = vm.state.pendingApproval {
+            if let approval = vm.snapshot.pendingApproval {
                 ApprovalBar(
                     request: approval,
                     onApprove: {
@@ -111,16 +111,16 @@ public struct ConversationDetailView: View {
 
             WorkspaceChipBar()          // 冻结：只读 chip
             ChatComposer(
-                placeholder: vm.state.pendingApproval != nil
+                placeholder: vm.snapshot.pendingApproval != nil
                     ? "审批中 — 请选择「允许」或「拒绝」"
                     : "输入消息…",
-                isEnabled: vm.state.pendingApproval == nil
+                isEnabled: vm.snapshot.pendingApproval == nil
             ) { text in
                 await vm.sendMessage(text)
                 return true
             }
         }
-        .animation(.easeOut(duration: 0.25), value: vm.state.pendingApproval != nil)
+        .animation(.easeOut(duration: 0.25), value: vm.snapshot.pendingApproval != nil)
     }
 
     // MARK: - Toolbar

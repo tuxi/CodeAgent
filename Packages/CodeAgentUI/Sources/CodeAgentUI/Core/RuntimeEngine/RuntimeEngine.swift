@@ -16,13 +16,17 @@ public struct RuntimeSnapshot: Sendable {
     public let graph: ExecutionGraph
     public let timeline: [ExecutionNode]
     public let pendingApproval: ApprovalRequest?
+    public let latestTodos: [TodoItem]
     public let isLive: Bool
 
     public init(graph: ExecutionGraph, timeline: [ExecutionNode],
-                pendingApproval: ApprovalRequest? = nil, isLive: Bool = false) {
+                pendingApproval: ApprovalRequest? = nil,
+                latestTodos: [TodoItem] = [],
+                isLive: Bool = false) {
         self.graph = graph
         self.timeline = timeline
         self.pendingApproval = pendingApproval
+        self.latestTodos = latestTodos
         self.isLive = isLive
     }
 
@@ -56,6 +60,9 @@ public actor RuntimeEngine {
     /// Pending approval (mirrors ConversationState for backward compat).
     private var _pendingApproval: ApprovalRequest?
 
+    /// Latest todo list from the agent.
+    private var _latestTodos: [TodoItem] = []
+
     /// Whether the live WebSocket is connected.
     private var isLive: Bool = false
 
@@ -84,6 +91,10 @@ public actor RuntimeEngine {
         // Track pending approval
         if case .approvalRequest(_, let request) = event {
             _pendingApproval = request
+        }
+        // Track todos
+        if case .todoUpdated(_, let todos) = event {
+            _latestTodos = todos
         }
         // Clear pending approval on turn boundary
         if case .turnStarted = event {
@@ -163,6 +174,7 @@ public actor RuntimeEngine {
             graph: graph,
             timeline: timeline,
             pendingApproval: _pendingApproval,
+            latestTodos: _latestTodos,
             isLive: isLive
         )
     }
