@@ -37,9 +37,10 @@ public struct DefaultMergePolicy: MergePolicy {
         // Consecutive assistant messages merge (streaming deltas)
         case (.message(let prev), .message(let next)):
             return prev.role == next.role && prev.role == .assistant
-        // System nodes of the same kind merge (e.g. consecutive model activity)
-        case (.system(let prev), .system(let next)):
-            return prev.kind == next.kind && prev.kind != .error
+        // System nodes never merge — each is a distinct event
+        // (model started/finished are separate timeline events, not deltas)
+        case (.system, .system):
+            return false
         default:
             return false
         }
