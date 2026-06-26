@@ -112,7 +112,8 @@ struct SystemEventRow: View {
                 .font(.caption2)
             Text(payload.text)
                 .font(.caption2)
-                .lineLimit(1)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer()
         }
         .foregroundStyle(.tertiary)
