@@ -20,18 +20,18 @@ public struct SidebarView: View {
 
         VStack(spacing: 0) {
 
-            Picker("Tab", selection: $store.selectedTab) {
-                ForEach(SidebarTab.allCases) { tab in
-                    Label(tab.title, systemImage: tab.systemImage)
-                        .tag(tab)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-
-            Divider()
+//            Picker("Tab", selection: $store.selectedTab) {
+//                ForEach(SidebarTab.allCases) { tab in
+//                    Label(tab.title, systemImage: tab.systemImage)
+//                        .tag(tab)
+//                }
+//            }
+//            .pickerStyle(.segmented)
+//            .labelsHidden()
+//            .padding(.horizontal, 12)
+//            .padding(.vertical, 10)
+//
+//            Divider()
 
             ConversationListView(
                 viewModel: store.listViewModel,

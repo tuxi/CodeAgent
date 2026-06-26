@@ -65,18 +65,10 @@ private struct TurnCardView: View {
                     WorkProductCard(item: item, artifact: turn.artifactGraph.nodes[callID])
                 }
             }
-            // ── 审批请求 ──
+            // ── 审批请求（已处理的只显示历史，未处理的由 Composer 区拦截）──
             ForEach(turn.approvalRequests) { approval in
-                if !approval.resolved {
-                    ApprovalCardInline(
-                        request: approval.request,
-                        onApprove: {
-                            Task { await viewModel.approve(id: approval.request.id, approved: true) }
-                        },
-                        onReject: {
-                            Task { await viewModel.approve(id: approval.request.id, approved: false) }
-                        }
-                    )
+                if approval.resolved {
+                    ApprovalCardResolved(request: approval.request, approved: approval.approved ?? false)
                 }
             }
 
@@ -357,26 +349,23 @@ private struct ToolFallbackContent: View {
 }
 
 
-private struct ApprovalCardInline: View {
+private struct ApprovalCardResolved: View {
     let request: ApprovalRequest
-    let onApprove: () -> Void
-    let onReject: () -> Void
+    let approved: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("审批: \(request.toolName)", systemImage: "exclamationmark.shield")
-                .font(.caption.weight(.medium))
-
-            HStack(spacing: 8) {
-                Button("允许", action: onApprove)
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                Button("拒绝", role: .destructive, action: onReject)
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-            }
+        HStack(spacing: 4) {
+            Image(systemName: approved ? "checkmark.shield" : "xmark.shield")
+                .font(.caption)
+                .foregroundStyle(approved ? .green : .red)
+            Text("审批: \(request.toolName)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(approved ? "已允许" : "已拒绝")
+                .font(.caption2)
+                .foregroundStyle(approved ? .green : .red)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
 }
 

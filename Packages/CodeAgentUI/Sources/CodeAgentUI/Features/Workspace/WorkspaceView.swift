@@ -32,7 +32,7 @@ public struct WorkspaceView: View {
     public var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView()
-                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 360)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 260, max: 360)
         } detail: {
             NavigationStack(path: $router.path) {
                 ConversationDetailView(conversation: store.selectedConversation)

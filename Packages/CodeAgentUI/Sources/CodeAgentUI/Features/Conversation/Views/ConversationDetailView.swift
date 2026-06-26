@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import CoreKit
 
 public struct ConversationDetailView: View {
 
@@ -93,12 +94,33 @@ public struct ConversationDetailView: View {
     private func activeView(vm: ConversationViewModel) -> some View {
         VStack(spacing: 0) {
             ConversationTimelineView(viewModel: vm)
+
+            // ── 审批拦截栏（阻断 input pipeline）──
+            if let approval = vm.state.pendingApproval {
+                ApprovalBar(
+                    request: approval,
+                    onApprove: {
+                        Task { await vm.approve(id: approval.id, approved: true) }
+                    },
+                    onReject: {
+                        Task { await vm.approve(id: approval.id, approved: false) }
+                    }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             WorkspaceChipBar()          // 冻结：只读 chip
-            ChatComposer(placeholder: "输入消息…", isEnabled: true) { text in
+            ChatComposer(
+                placeholder: vm.state.pendingApproval != nil
+                    ? "审批中 — 请选择「允许」或「拒绝」"
+                    : "输入消息…",
+                isEnabled: vm.state.pendingApproval == nil
+            ) { text in
                 await vm.sendMessage(text)
                 return true
             }
         }
+        .animation(.easeOut(duration: 0.25), value: vm.state.pendingApproval != nil)
     }
 
     // MARK: - Toolbar
@@ -183,5 +205,64 @@ private struct ChatComposer: View {
             isSending = false
             if ok { text = "" }
         }
+    }
+}
+
+// MARK: - ApprovalBar
+
+/// 审批拦截栏 — 显示在输入框上方，阻断 input pipeline。
+/// 对标 Claude Code / Cursor：审批不是消息，而是阻塞输入的状态。
+private struct ApprovalBar: View {
+    let request: ApprovalRequest
+    let onApprove: () -> Void
+    let onReject: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.shield.fill")
+                        .foregroundStyle(.yellow)
+                    Text("需要审批")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                }
+
+                Text("工具: \(request.toolName)")
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+
+                if let args = request.toolArgs, case .object(let dict) = args, !dict.isEmpty {
+                    Text(argsSummary(dict))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(3)
+                }
+
+                HStack(spacing: 8) {
+                    Button("允许", action: onApprove)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    Button("拒绝", role: .destructive, action: onReject)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+
+                    Spacer()
+
+                    if let deadline = request.deadlineMs {
+                        Text("超时 \(deadline / 1000)s")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+        }
+    }
+
+    private func argsSummary(_ dict: [String: JSONValue]) -> String {
+        dict.map { "\($0.key): \($0.value.stringValue)" }.joined(separator: ", ")
     }
 }
