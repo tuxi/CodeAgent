@@ -33,6 +33,8 @@ public enum AgentEvent: Sendable {
     // ── 工具（call_id 是 tool identity）──
     case toolStarted(turnID: String?, callID: String, tool: ToolCall)
     case toolFinished(turnID: String?, callID: String, result: ToolResult)
+    case toolStdout(turnID: String?, callID: String, chunk: String)
+    case toolStderr(turnID: String?, callID: String, chunk: String)
     case observed(turnID: String?, callID: String?, step: Int, toolName: String, observation: String?, failure: String?)
     case autoApproved(turnID: String?, toolName: String, toolArgs: JSONValue?, text: String?)
 
@@ -99,12 +101,19 @@ extension AgentEvent {
             )
             return .toolStarted(turnID: turnID, callID: callID ?? "", tool: tool)
 
+        case "tool_stdout":
+            return .toolStdout(turnID: turnID, callID: callID ?? "", chunk: wire.chunk ?? "")
+
+        case "tool_stderr":
+            return .toolStderr(turnID: turnID, callID: callID ?? "", chunk: wire.chunk ?? "")
+
         case "tool_finished":
             let result = ToolResult(
                 callID: callID ?? "",
                 toolName: wire.toolName ?? "unknown",
                 observation: wire.observation.normalized,
-                error: wire.err.normalized
+                error: wire.err.normalized,
+                elapsedMs: wire.elapsedMs
             )
             return .toolFinished(turnID: turnID, callID: callID ?? "", result: result)
 

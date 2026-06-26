@@ -174,15 +174,18 @@ public struct ToolExecPayload: Sendable {
     public let args: JSONValue?
     public var output: String
     public var exitCode: Int?
+    public var elapsedMs: Int?
     public var isAutoApproved: Bool
 
     public init(callID: String, toolName: String, args: JSONValue?,
-                output: String = "", exitCode: Int? = nil, isAutoApproved: Bool = false) {
+                output: String = "", exitCode: Int? = nil,
+                elapsedMs: Int? = nil, isAutoApproved: Bool = false) {
         self.callID = callID
         self.toolName = toolName
         self.args = args
         self.output = output
         self.exitCode = exitCode
+        self.elapsedMs = elapsedMs
         self.isAutoApproved = isAutoApproved
     }
 }

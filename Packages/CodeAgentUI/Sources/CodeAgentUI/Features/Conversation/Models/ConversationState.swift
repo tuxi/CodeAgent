@@ -349,7 +349,7 @@ extension ConversationState {
 
         // ── 其他 ──
 
-        case .observed, .autoApproved, .skillLoaded:
+        case .toolStdout, .toolStderr, .observed, .autoApproved, .skillLoaded:
             break // no-op（暂不参与 Turn 结构）
         }
     }

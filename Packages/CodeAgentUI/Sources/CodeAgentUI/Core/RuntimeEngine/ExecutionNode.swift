@@ -69,13 +69,15 @@ public struct ToolNodePayload: Sendable {
     public let status: ToolNodeStatus
     public let output: String
     public let exitCode: Int?
+    public let elapsedMs: Int?
     public let isAutoApproved: Bool
     /// When non-nil, the tool produced an artifact — links to Inspector.
     public let artifact: ArtifactNode?
 
     public init(callID: String, toolName: String, args: JSONValue?,
                 status: ToolNodeStatus, output: String = "",
-                exitCode: Int? = nil, isAutoApproved: Bool = false,
+                exitCode: Int? = nil, elapsedMs: Int? = nil,
+                isAutoApproved: Bool = false,
                 artifact: ArtifactNode? = nil) {
         self.callID = callID
         self.toolName = toolName
@@ -83,6 +85,7 @@ public struct ToolNodePayload: Sendable {
         self.status = status
         self.output = output
         self.exitCode = exitCode
+        self.elapsedMs = elapsedMs
         self.isAutoApproved = isAutoApproved
         self.artifact = artifact
     }

@@ -36,12 +36,15 @@ public struct ToolResult: Sendable, Hashable {
     public let observation: String?
     /// 错误信息（工具执行失败时非空）。
     public let error: String?
+    /// 工具执行耗时（毫秒），服务端 P2 新增。
+    public let elapsedMs: Int?
 
-    public init(callID: String, toolName: String, observation: String?, error: String?) {
+    public init(callID: String, toolName: String, observation: String?, error: String?, elapsedMs: Int? = nil) {
         self.callID = callID
         self.toolName = toolName
         self.observation = observation
         self.error = error
+        self.elapsedMs = elapsedMs
     }
 }
 

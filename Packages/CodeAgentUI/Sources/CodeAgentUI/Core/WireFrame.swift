@@ -44,11 +44,12 @@ struct WireFrame: Decodable {
     let savedTokens: Int?
     let summaryChars: Int?
     let ratio: Double?
+    let chunk: String?
     let err: String?
 
     enum CodingKeys: String, CodingKey {
         case type, kind, at, step, id, server
-        case text, observation, failure, err, ratio, todos
+        case text, observation, failure, err, ratio, todos, chunk
         case eventId = "event_id"
         case sessionId = "session_id"
         case parentSessionId = "parent_session_id"

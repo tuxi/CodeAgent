@@ -59,6 +59,7 @@ public struct TimelineProjection: Sendable {
                 callID: payload.callID, toolName: payload.toolName,
                 args: payload.args, status: status,
                 output: payload.output, exitCode: payload.exitCode,
+                elapsedMs: payload.elapsedMs,
                 isAutoApproved: payload.isAutoApproved, artifact: artifact
             ))
 

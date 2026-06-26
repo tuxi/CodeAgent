@@ -56,6 +56,12 @@ struct ToolCard: View {
 
                     Spacer()
 
+                    if let elapsed = tool.elapsedMs {
+                        Text(formatElapsed(elapsed))
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+
                     if let code = tool.exitCode, code != 0 {
                         Text("exit \(code)")
                             .font(.caption2)
@@ -150,6 +156,14 @@ struct ToolCard: View {
         case .completed: return .green
         case .failed: return .red
         case .autoApproved: return .blue
+        }
+    }
+
+    private func formatElapsed(_ ms: Int) -> String {
+        if ms >= 1000 {
+            String(format: "%.1fs", Double(ms) / 1000.0)
+        } else {
+            "\(ms)ms"
         }
     }
 

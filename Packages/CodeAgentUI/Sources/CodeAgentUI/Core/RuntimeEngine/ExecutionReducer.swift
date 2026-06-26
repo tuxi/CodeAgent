@@ -52,10 +52,21 @@ public struct ExecutionReducer: Sendable {
                                      callID: callID, toolName: tool.toolName,
                                      args: tool.toolArgs, ts: ts, graph: &graph)
 
+        case .toolStdout(let turnID, let callID, let chunk):
+            return handleToolOutput(turnID: turnID ?? internalState.currentTurnID ?? "",
+                                    callID: callID, chunk: chunk, isStderr: false,
+                                    ts: ts, graph: &graph)
+
+        case .toolStderr(let turnID, let callID, let chunk):
+            return handleToolOutput(turnID: turnID ?? internalState.currentTurnID ?? "",
+                                    callID: callID, chunk: chunk, isStderr: true,
+                                    ts: ts, graph: &graph)
+
         case .toolFinished(let turnID, let callID, let result):
             return handleToolFinished(turnID: turnID ?? internalState.currentTurnID ?? "",
                                       callID: callID, observation: result.observation,
-                                      error: result.error, ts: ts, graph: &graph)
+                                      error: result.error, elapsedMs: result.elapsedMs,
+                                      ts: ts, graph: &graph)
 
         // ── Observation (previously ignored!) ──
         case .observed(let turnID, let callID, _, _, let observation, let failure):
@@ -251,8 +262,25 @@ public struct ExecutionReducer: Sendable {
         return [nodeID]
     }
 
+    /// Handle streaming stdout/stderr chunks — append to tool node's output.
+    private mutating func handleToolOutput(turnID: String, callID: String, chunk: String,
+                                            isStderr: Bool, ts: TimeInterval,
+                                            graph: inout ExecutionGraph) -> [NodeID] {
+        guard var toolNode = graph.nodes[callID],
+              case .toolCall(var payload) = toolNode.payload else {
+            return []
+        }
+        let prefix = isStderr ? "[stderr] " : ""
+        payload.output += prefix + chunk
+        toolNode.payload = .toolCall(payload)
+        toolNode.timestamp = ts
+        graph.upsertNode(toolNode)
+        return [callID]
+    }
+
     private mutating func handleToolFinished(turnID: String, callID: String,
                                               observation: String?, error: String?,
+                                              elapsedMs: Int?,
                                               ts: TimeInterval,
                                               graph: inout ExecutionGraph) -> [NodeID] {
         internalState.activeToolCallIDs.remove(callID)
@@ -262,11 +290,17 @@ public struct ExecutionReducer: Sendable {
         }
 
         if let err = error, !err.isEmpty {
-            payload.output = err
+            // Only show error if no streaming output accumulated
+            if payload.output.isEmpty {
+                payload.output = err
+            }
             payload.exitCode = 1
             toolNode.status = .failed
         } else {
-            payload.output = observation ?? ""
+            // Use observation only if no streaming output accumulated
+            if payload.output.isEmpty, let obs = observation {
+                payload.output = obs
+            }
             toolNode.status = .completed
         }
         toolNode.payload = .toolCall(payload)
