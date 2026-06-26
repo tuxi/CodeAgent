@@ -103,8 +103,8 @@ extension AgentEvent {
             let result = ToolResult(
                 callID: callID ?? "",
                 toolName: wire.toolName ?? "unknown",
-                observation: wire.observation,
-                error: wire.err
+                observation: wire.observation.normalized,
+                error: wire.err.normalized
             )
             return .toolFinished(turnID: turnID, callID: callID ?? "", result: result)
 
@@ -114,8 +114,8 @@ extension AgentEvent {
                 callID: callID,
                 step: wire.step ?? 0,
                 toolName: wire.toolName ?? "unknown",
-                observation: wire.observation,
-                failure: wire.failure
+                observation: wire.observation.normalized,
+                failure: wire.failure.normalized
             )
 
         case "auto_approved":
@@ -175,5 +175,18 @@ extension AgentEvent {
             // 前向兼容：忽略未知 kind，不崩
             return nil
         }
+    }
+}
+
+// MARK: - Wire value normalization
+
+/// 将服务端 sentinel 值规范化：nil / "" / "none" → nil。
+private extension Optional where Wrapped == String {
+    var normalized: String? {
+        guard let self else { return nil }
+        let trimmed = self.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard trimmed.lowercased() != "none" else { return nil }
+        return self
     }
 }

@@ -2,9 +2,10 @@
 //  ConversationViewModel.swift
 //  CodeAgentUI
 //
-//  单个会话的 ViewModel。持有 `ConversationState`（Turn State Machine）并暴露给 View。
-//  通过 `RuntimeClient` 消费 agent-wire v1 事件流。
-//  支持「先补历史、再接实时流」恢复流程。
+//  Thin subscriber to RuntimeEngine.
+//  ViewModel does NOT reduce — it only subscribes to RuntimeEngine.stateStream().
+//  Primary UI data source: `snapshot: RuntimeSnapshot`.
+//  `state: ConversationState` kept as deprecated backward-compat for approval/todo.
 //
 
 import SwiftUI
@@ -16,14 +17,26 @@ import CoreKit
 @Observable
 public final class ConversationViewModel {
 
-    /// Turn State Machine — UI 唯一数据源（替代旧 TimelineState）。
+    // ── v2: Runtime Engine (primary data source) ──
+
+    /// The event-sourced runtime engine for this session.
+    private var engine: RuntimeEngine?
+
+    /// Latest snapshot from the engine — primary UI data source.
+    public private(set) var snapshot: RuntimeSnapshot = .empty(sessionID: "")
+
+    // ── v1 (deprecated): kept for backward-compat during transition ──
+
+    /// Legacy state machine. Prefer `snapshot` for new code.
+    @available(*, deprecated, message: "Use snapshot.timeline instead of state.orderedTurns")
     public private(set) var state = ConversationState()
+
+    // ── Session identity ──
 
     /// 当前会话引用。
     public private(set) var conversation: ConversationRef?
 
     /// P5.0 — 本会话绑定的工作区（创建时锁定，不可变）。
-    /// 新建会话由 `commitDraft` 注入；从侧栏打开的历史会话回退到 `detail?.workspacePath`。
     public let workspace: Workspace?
 
     /// 是否已连接事件流。
@@ -37,6 +50,7 @@ public final class ConversationViewModel {
 
     private let client: RuntimeClient
     private var streamTask: Task<Void, Never>?
+    private var snapshotTask: Task<Void, Never>?
 
     // MARK: - Init
 
@@ -45,7 +59,7 @@ public final class ConversationViewModel {
         self.workspace = workspace
     }
 
-    /// 本会话用于展示的工作区标签：优先绑定的 `Workspace`，否则回退到 detail 里的路径名。
+    /// 本会话用于展示的工作区标签。
     public var workspaceDisplayName: String? {
         if let workspace { return workspace.name }
         if let path = detail?.workspacePath, !path.isEmpty {
@@ -56,26 +70,46 @@ public final class ConversationViewModel {
 
     // MARK: - Public API
 
-    /// 连接指定会话：先拉历史回放 Timeline，再连 WS 收增量。
-    /// 规范推荐恢复流程：`GET /events` → 渲染 → `connect()` → 增量。
+    /// 连接指定会话：先拉历史回放，再连 WS 收增量。
+    /// v2 流程：
+    ///   Phase 1: HTTP fetch history → RuntimeEngine.importHistory()
+    ///   Phase 2: WebSocket stream → RuntimeEngine.ingest() per event
+    ///   UI subscribes to RuntimeEngine.stateStream() for snapshots
     public func connect(to conversation: ConversationRef) async {
         self.conversation = conversation
+        self.snapshot = .empty(sessionID: conversation.id)
         state = ConversationState()
         detail = nil
         messages = []
 
-        // Phase 1: 拉取历史数据
-        await fetchHistory(conversationID: conversation.id)
+        // Create engine for this session
+        let eng = RuntimeEngine(sessionID: conversation.id)
+        self.engine = eng
 
-        // Phase 2: 连接实时流
+        // Subscribe to state stream BEFORE importing history
+        let stream = eng.stateStream()
+        snapshotTask = Task { [weak self] in
+            for await snap in stream {
+                guard let self else { return }
+                self.snapshot = snap
+                // Also mirror to legacy state for backward compat
+                self.mirrorToLegacyState(snap)
+            }
+        }
+
+        // Phase 1: 拉取历史数据 → import into engine
+        await fetchHistory(conversationID: conversation.id, engine: eng)
+
+        // Phase 2: 连接实时流 → feed to engine
         do {
-            let stream = try await client.connect(conversationID: conversation.id)
+            let eventStream = try await client.connect(conversationID: conversation.id)
             isConnected = true
+            await eng.markLive()
 
             streamTask = Task { [weak self] in
                 guard let self else { return }
-                for await event in stream {
-                    await self.handleEvent(event)
+                for await event in eventStream {
+                    await self.handleEvent(event, engine: eng)
                 }
                 await self.setDisconnected()
             }
@@ -93,6 +127,7 @@ public final class ConversationViewModel {
     public func approve(id: String, approved: Bool) async {
         await client.sendApproval(id: id, approved: approved)
         state.resolveApproval(id: id, approved: approved)
+        await engine?.resolveApproval(requestID: id, approved: approved)
     }
 
     /// 取消当前 turn。
@@ -108,6 +143,9 @@ public final class ConversationViewModel {
     public func disconnect() async {
         streamTask?.cancel()
         streamTask = nil
+        snapshotTask?.cancel()
+        snapshotTask = nil
+        engine = nil
         await client.disconnect()
         isConnected = false
         conversation = nil
@@ -115,8 +153,7 @@ public final class ConversationViewModel {
 
     // MARK: - History
 
-    /// 拉取会话详情、消息主干、历史事件，回放到 ConversationState。
-    private func fetchHistory(conversationID: String) async {
+    private func fetchHistory(conversationID: String, engine: RuntimeEngine) async {
         async let detailTask = try? client.getConversationDetail(id: conversationID)
         async let messagesTask = try? client.getMessages(conversationID: conversationID)
         async let eventsTask = try? client.getEvents(conversationID: conversationID)
@@ -127,6 +164,10 @@ public final class ConversationViewModel {
         self.messages = messagesResult ?? []
 
         if let events = eventsResult {
+            // v2: import into engine (replays through reducer → projects timeline)
+            await engine.importHistory(events)
+
+            // Also replay into legacy state for backward compat
             for event in events {
                 state.reduce(event)
             }
@@ -136,8 +177,23 @@ public final class ConversationViewModel {
 
     // MARK: - Event handling
 
-    private func handleEvent(_ event: AgentEvent) async {
+    /// v2: delegate to engine. ViewModel does NOT reduce.
+    private func handleEvent(_ event: AgentEvent, engine: RuntimeEngine) async {
+        // Mirror to legacy state for backward compat during transition
         state.reduce(event)
+        // v2: engine ingests the event → reduces → projects → publishes snapshot
+        await engine.ingest(event)
+    }
+
+    /// Mirror engine snapshot to legacy ConversationState for backward compat.
+    private func mirrorToLegacyState(_ snap: RuntimeSnapshot) {
+        // Keep pending approval in sync
+        if let approval = snap.pendingApproval {
+            state.pendingApproval = approval
+        }
+        // Note: full TurnGroup mirror is not needed — legacy state is only
+        // used for quick-access fields (pendingApproval, latestTodos) during transition.
+        // Timeline UI reads exclusively from snapshot.
     }
 
     private func setDisconnected() async {
