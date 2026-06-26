@@ -120,6 +120,10 @@ public struct ExecutionReducer: Sendable {
             return handleTaskFinished(turnID: turnID ?? internalState.currentTurnID ?? "",
                                       sessionID: sessionId, result: text, ts: ts, graph: &graph)
 
+        // ── Plan Approval (handled at RuntimeEngine level, not in graph) ──
+        case .planApprovalRequest:
+            return []
+
         // ── Approval ──
         case .approvalRequest(let turnID, let request):
             return handleApprovalRequest(turnID: turnID ?? internalState.currentTurnID ?? "",

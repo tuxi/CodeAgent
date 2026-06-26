@@ -54,6 +54,10 @@ public final class DefaultAgentClient: RuntimeClient, @unchecked Sendable {
         socket?.sendApproval(id: id, approved: approved)
     }
 
+    public func sendPlanApproval(id: String, approved: Bool) async {
+        socket?.sendPlanApproval(id: id, approved: approved)
+    }
+
     public func cancelTurn() async {
         socket?.cancelTurn()
     }

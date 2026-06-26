@@ -130,6 +130,12 @@ public final class ConversationViewModel {
         await engine?.resolveApproval(requestID: id, approved: approved)
     }
 
+    /// 回复计划审批请求。
+    public func approvePlan(id: String, approved: Bool) async {
+        await client.sendPlanApproval(id: id, approved: approved)
+        await engine?.resolvePlanApproval(requestID: id, approved: approved)
+    }
+
     /// 取消当前 turn。
     public func cancelTurn() async {
         await client.cancelTurn()

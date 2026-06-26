@@ -54,6 +54,7 @@ public enum AgentEvent: Sendable {
 
     // ── 审批 ──
     case approvalRequest(turnID: String?, request: ApprovalRequest)
+    case planApprovalRequest(turnID: String?, request: PlanApprovalRequest)
 }
 
 // MARK: - WireFrame → AgentEvent conversion

@@ -305,6 +305,9 @@ extension ConversationState {
 
         // ── 审批 ──
 
+        case .planApprovalRequest:
+            break // no-op — plan approval handled by RuntimeEngine
+
         case .approvalRequest(let turnID, let request):
             let tid = turnID ?? currentTurnID
             if let tid, var turn = turns[tid] {

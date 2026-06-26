@@ -51,3 +51,48 @@ public struct ApprovalRequest: Sendable, Identifiable, Hashable {
         )
     }
 }
+
+// MARK: - PlanApprovalRequest
+
+/// Plan Mode 审批请求：模型调用 propose_plan 时服务端推送。
+/// type == "plan_approval_request"，包含完整 plan markdown。
+public struct PlanApprovalRequest: Sendable, Identifiable, Hashable {
+    public let id: String
+    public let planID: String
+    public let title: String
+    /// Plan 正文（markdown 格式）。
+    public let content: String
+    /// 超时毫秒数。
+    public let deadlineMs: Int?
+    public let sessionId: String?
+    public let turnId: String?
+
+    public var deadlineSeconds: Int? { deadlineMs.map { $0 / 1000 } }
+
+    public init(
+        id: String, planID: String, title: String, content: String,
+        deadlineMs: Int?, sessionId: String?, turnId: String?
+    ) {
+        self.id = id
+        self.planID = planID
+        self.title = title
+        self.content = content
+        self.deadlineMs = deadlineMs
+        self.sessionId = sessionId
+        self.turnId = turnId
+    }
+
+    /// 从 WireFrame 构造 plan_approval_request。
+    static func from(wire: WireFrame) -> PlanApprovalRequest? {
+        guard wire.type == "plan_approval_request", let id = wire.id else { return nil }
+        return PlanApprovalRequest(
+            id: id,
+            planID: wire.planId ?? "",
+            title: wire.title ?? "Plan",
+            content: wire.content ?? "",
+            deadlineMs: wire.deadlineMs,
+            sessionId: wire.sessionId,
+            turnId: wire.turnId
+        )
+    }
+}

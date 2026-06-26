@@ -100,6 +100,11 @@ public final class AgentWireSocket: @unchecked Sendable {
         send(outgoing: OutgoingApprovalResponse(id: id, approved: approved))
     }
 
+    /// 发送计划审批回复。
+    public func sendPlanApproval(id: String, approved: Bool) {
+        send(outgoing: OutgoingPlanApprovalResponse(id: id, approved: approved))
+    }
+
     /// 取消当前 turn。
     public func cancelTurn() {
         send(outgoing: OutgoingCancelTurn())
@@ -150,6 +155,10 @@ public final class AgentWireSocket: @unchecked Sendable {
         case "approval_request":
             guard let request = ApprovalRequest.from(wire: frame) else { return }
             continuation?.yield(.approvalRequest(turnID: frame.turnId, request: request))
+
+        case "plan_approval_request":
+            guard let plan = PlanApprovalRequest.from(wire: frame) else { return }
+            continuation?.yield(.planApprovalRequest(turnID: frame.turnId, request: plan))
 
         default:
             // 未知控制帧类型：忽略（前向兼容）

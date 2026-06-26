@@ -30,6 +30,9 @@ public protocol RuntimeClient: Sendable {
     /// 审批回复 — 对应某条 `approval_request`。
     func sendApproval(id: String, approved: Bool) async
 
+    /// 计划审批回复 — 对应某条 `plan_approval_request`。
+    func sendPlanApproval(id: String, approved: Bool) async
+
     /// 取消当前正在执行的 turn。
     func cancelTurn() async
 

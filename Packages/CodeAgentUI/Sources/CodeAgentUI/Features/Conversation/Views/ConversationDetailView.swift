@@ -95,7 +95,21 @@ public struct ConversationDetailView: View {
         VStack(spacing: 0) {
             ConversationTimelineView(viewModel: vm)
 
-            // ── 审批拦截栏（阻断 input pipeline）──
+            // ── 计划审批拦截栏（Plan Mode）──
+            if let plan = vm.snapshot.pendingPlanApproval {
+                PlanApprovalBar(
+                    plan: plan,
+                    onApprove: {
+                        Task { await vm.approvePlan(id: plan.id, approved: true) }
+                    },
+                    onReject: {
+                        Task { await vm.approvePlan(id: plan.id, approved: false) }
+                    }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            // ── 工具审批拦截栏（阻断 input pipeline）──
             if let approval = vm.snapshot.pendingApproval {
                 ApprovalBar(
                     request: approval,
@@ -111,16 +125,17 @@ public struct ConversationDetailView: View {
 
             WorkspaceChipBar()          // 冻结：只读 chip
             ChatComposer(
-                placeholder: vm.snapshot.pendingApproval != nil
+                placeholder: (vm.snapshot.pendingApproval != nil || vm.snapshot.pendingPlanApproval != nil)
                     ? "审批中 — 请选择「允许」或「拒绝」"
                     : "输入消息…",
-                isEnabled: vm.snapshot.pendingApproval == nil
+                isEnabled: vm.snapshot.pendingApproval == nil && vm.snapshot.pendingPlanApproval == nil
             ) { text in
                 await vm.sendMessage(text)
                 return true
             }
         }
         .animation(.easeOut(duration: 0.25), value: vm.snapshot.pendingApproval != nil)
+        .animation(.easeOut(duration: 0.25), value: vm.snapshot.pendingPlanApproval != nil)
     }
 
     // MARK: - Toolbar
@@ -264,5 +279,78 @@ private struct ApprovalBar: View {
 
     private func argsSummary(_ dict: [String: JSONValue]) -> String {
         dict.map { "\($0.key): \($0.value.stringValue)" }.joined(separator: ", ")
+    }
+}
+
+// MARK: - PlanApprovalBar
+
+/// Plan Mode 审批卡片 — 展示完整 plan markdown。
+/// 比工具审批更大，提供 Approve / Reject 按钮。
+private struct PlanApprovalBar: View {
+    let plan: PlanApprovalRequest
+    let onApprove: () -> Void
+    let onReject: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+
+            VStack(alignment: .leading, spacing: 10) {
+                // Header
+                HStack(spacing: 8) {
+                    Image(systemName: "text.document.fill")
+                        .foregroundStyle(.blue)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(plan.title)
+                            .font(.subheadline.weight(.semibold))
+                        Text("Proposed Plan")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    if let deadline = plan.deadlineSeconds {
+                        Text("\(deadline)s")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(.quaternary)
+                            .clipShape(Capsule())
+                    }
+                }
+
+                // Plan content — markdown rendered in a scrollable area
+                ScrollView(.vertical, showsIndicators: true) {
+                    MarkdownRenderer(text: plan.content)
+                        .font(.caption)
+                }
+                .frame(maxHeight: 300)
+                .padding(12)
+                .background(.quaternary.opacity(0.3))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                // Action buttons
+                HStack(spacing: 8) {
+                    Button(action: onApprove) {
+                        Label("Approve Plan", systemImage: "checkmark.circle.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+
+                    Button(role: .destructive, action: onReject) {
+                        Label("Reject", systemImage: "xmark.circle.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+        }
     }
 }

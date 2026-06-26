@@ -16,6 +16,7 @@ public struct RuntimeSnapshot: Sendable {
     public let graph: ExecutionGraph
     public let timeline: [ExecutionNode]
     public let pendingApproval: ApprovalRequest?
+    public let pendingPlanApproval: PlanApprovalRequest?
     public let latestTodos: [TodoItem]
     /// Token & timing from the most recent model_finished event.
     public let modelStats: ModelStats?
@@ -23,12 +24,14 @@ public struct RuntimeSnapshot: Sendable {
 
     public init(graph: ExecutionGraph, timeline: [ExecutionNode],
                 pendingApproval: ApprovalRequest? = nil,
+                pendingPlanApproval: PlanApprovalRequest? = nil,
                 latestTodos: [TodoItem] = [],
                 modelStats: ModelStats? = nil,
                 isLive: Bool = false) {
         self.graph = graph
         self.timeline = timeline
         self.pendingApproval = pendingApproval
+        self.pendingPlanApproval = pendingPlanApproval
         self.latestTodos = latestTodos
         self.modelStats = modelStats
         self.isLive = isLive
@@ -86,6 +89,9 @@ public actor RuntimeEngine {
     /// Pending approval (mirrors ConversationState for backward compat).
     private var _pendingApproval: ApprovalRequest?
 
+    /// Pending plan approval (Plan Mode).
+    private var _pendingPlanApproval: PlanApprovalRequest?
+
     /// Latest todo list from the agent.
     private var _latestTodos: [TodoItem] = []
 
@@ -120,6 +126,10 @@ public actor RuntimeEngine {
         // Track pending approval
         if case .approvalRequest(_, let request) = event {
             _pendingApproval = request
+        }
+        // Track plan approval
+        if case .planApprovalRequest(_, let plan) = event {
+            _pendingPlanApproval = plan
         }
         // Track todos
         if case .todoUpdated(_, let todos) = event {
@@ -172,7 +182,6 @@ public actor RuntimeEngine {
     /// Resolve an approval (called by ViewModel when user approves/rejects).
     public func resolveApproval(requestID: String, approved: Bool) {
         _pendingApproval = nil
-        // Update the approval node in graph
         let nodeID = "approval_\(requestID)"
         graph.updateNode(nodeID) { node in
             if case .approval(var payload) = node.payload {
@@ -182,6 +191,12 @@ public actor RuntimeEngine {
                 node.status = .completed
             }
         }
+        yieldSnapshot()
+    }
+
+    /// Resolve a plan approval.
+    public func resolvePlanApproval(requestID: String, approved: Bool) {
+        _pendingPlanApproval = nil
         yieldSnapshot()
     }
 
@@ -210,6 +225,7 @@ public actor RuntimeEngine {
             graph: graph,
             timeline: timeline,
             pendingApproval: _pendingApproval,
+            pendingPlanApproval: _pendingPlanApproval,
             latestTodos: _latestTodos,
             modelStats: _modelStats,
             isLive: isLive

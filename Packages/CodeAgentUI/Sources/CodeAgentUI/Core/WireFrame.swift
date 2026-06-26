@@ -34,6 +34,9 @@ struct WireFrame: Decodable {
     let toolArgs: JSONValue?
     let observation: String?
     let failure: String?
+    let planId: String?
+    let title: String?
+    let content: String?
     let skillVersion: String?
     let todos: [WireTodo]?
     let text: String?
@@ -57,6 +60,8 @@ struct WireFrame: Decodable {
         case callId = "call_id"
         case toolName = "tool_name"
         case toolArgs = "tool_args"
+        case planId = "plan_id"
+        case title, content
         case skillVersion = "skill_version"
         case promptTokens = "prompt_tokens"
         case elapsedMs = "elapsed_ms"
@@ -98,6 +103,13 @@ struct OutgoingCancelTurn: Encodable {
 /// 出站：审批回复。
 struct OutgoingApprovalResponse: Encodable {
     let type = "approval_response"
+    let id: String
+    let approved: Bool
+}
+
+/// 出站：计划审批回复。
+struct OutgoingPlanApprovalResponse: Encodable {
+    let type = "plan_approval_response"
     let id: String
     let approved: Bool
 }
