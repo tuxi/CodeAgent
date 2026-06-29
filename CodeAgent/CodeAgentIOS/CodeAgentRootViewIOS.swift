@@ -8,7 +8,7 @@
 #if os(iOS)
 
 import SwiftUI
-import CodeAgentUI
+import AgentKit
 
 struct CodeAgentRootView: View {
 

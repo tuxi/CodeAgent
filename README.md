@@ -105,8 +105,8 @@ SwiftUI                   ← 消费 Presentation，不接触原始 Graph
 ```
 Packages/
 ├── CoreKit/       — 基础层：JSON、WebSocket、网络、持久化
-├── CodeAgentUI/   — UI + Runtime Engine
-│   └── Sources/CodeAgentUI/
+├── AgentKit/   — UI + Runtime Engine
+│   └── Sources/AgentKit/
 │       ├── Core/
 │       │   ├── AgentEvent.swift        — v1 事件协议（不改）
 │       │   ├── AgentWireSocket.swift   — WebSocket 封装

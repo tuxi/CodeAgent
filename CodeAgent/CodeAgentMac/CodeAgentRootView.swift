@@ -8,8 +8,7 @@
 #if os(macOS)
 
 import SwiftUI
-import CodeAgentUI
-import CoreKit
+import AgentKit
 
 struct CodeAgentRootView: View {
 

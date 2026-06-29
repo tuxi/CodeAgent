@@ -6,22 +6,7 @@
 //
 
 import Foundation
-import CodeAgentUI
-import CoreKit
-
-struct NetworkConfig: ApiConfiguration {
-    var interceptor: RequestInterceptor?
-    #if DEBUG
-    var isDebugLogEnabled: Bool = true
-    #else
-    var isDebugLogEnabled: Bool = false
-    #endif
-    var baseURL: URL
-    var commonHeaders: [String : String]
-    var commonParameters: [String: Sendable] = [:]
-    var timeout: TimeInterval = 50
-    var decrypter: ApiDecrypter? = nil
-}
+import AgentKit
 
 
 @Observable

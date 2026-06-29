@@ -7,9 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D01D7D2A2FEBDF690097461D /* CoreKit in Frameworks */ = {isa = PBXBuildFile; productRef = D01D7D292FEBDF690097461D /* CoreKit */; };
-		D01D7D2D2FEBDF7B0097461D /* DesignKit in Frameworks */ = {isa = PBXBuildFile; productRef = D01D7D2C2FEBDF7B0097461D /* DesignKit */; };
-		D01D7E9B2FEBE3310097461D /* CodeAgentUI in Frameworks */ = {isa = PBXBuildFile; productRef = D01D7E9A2FEBE3310097461D /* CodeAgentUI */; };
+		D02FE6332FF2C7730099797A /* AgentKit in Frameworks */ = {isa = PBXBuildFile; productRef = D02FE6322FF2C7730099797A /* AgentKit */; };
+		D09F66AA2FEF54C8001B7D87 /* AgentKit in Frameworks */ = {isa = PBXBuildFile; productRef = D09F66A92FEF54C8001B7D87 /* AgentKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,9 +42,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D01D7D2A2FEBDF690097461D /* CoreKit in Frameworks */,
-				D01D7D2D2FEBDF7B0097461D /* DesignKit in Frameworks */,
-				D01D7E9B2FEBE3310097461D /* CodeAgentUI in Frameworks */,
+				D09F66AA2FEF54C8001B7D87 /* AgentKit in Frameworks */,
+				D02FE6332FF2C7730099797A /* AgentKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -58,6 +56,7 @@
 				D01D7D122FEBDBEA0097461D /* CodeAgent */,
 				D01D7D112FEBDBEA0097461D /* Products */,
 				D01D7D272FEBDF300097461D /* README.md */,
+				D09F66A72FEF503C001B7D87 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -67,6 +66,13 @@
 				D01D7D102FEBDBEA0097461D /* CodeAgent.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		D09F66A72FEF503C001B7D87 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -89,9 +95,8 @@
 			);
 			name = CodeAgent;
 			packageProductDependencies = (
-				D01D7D292FEBDF690097461D /* CoreKit */,
-				D01D7D2C2FEBDF7B0097461D /* DesignKit */,
-				D01D7E9A2FEBE3310097461D /* CodeAgentUI */,
+				D09F66A92FEF54C8001B7D87 /* AgentKit */,
+				D02FE6322FF2C7730099797A /* AgentKit */,
 			);
 			productName = CodeAgent;
 			productReference = D01D7D102FEBDBEA0097461D /* CodeAgent.app */;
@@ -122,9 +127,7 @@
 			mainGroup = D01D7D072FEBDBEA0097461D;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				D01D7D282FEBDF690097461D /* XCLocalSwiftPackageReference "Packages/CoreKit" */,
-				D01D7D2B2FEBDF7B0097461D /* XCLocalSwiftPackageReference "Packages/DesignKit" */,
-				D01D7E992FEBE3310097461D /* XCLocalSwiftPackageReference "Packages/CodeAgentUI" */,
+				D02FE6312FF2C7730099797A /* XCRemoteSwiftPackageReference "AgentKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D01D7D112FEBDBEA0097461D /* Products */;
@@ -388,33 +391,26 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		D01D7D282FEBDF690097461D /* XCLocalSwiftPackageReference "Packages/CoreKit" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = Packages/CoreKit;
+/* Begin XCRemoteSwiftPackageReference section */
+		D02FE6312FF2C7730099797A /* XCRemoteSwiftPackageReference "AgentKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/tuxi/AgentKit";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
 		};
-		D01D7D2B2FEBDF7B0097461D /* XCLocalSwiftPackageReference "Packages/DesignKit" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = Packages/DesignKit;
-		};
-		D01D7E992FEBE3310097461D /* XCLocalSwiftPackageReference "Packages/CodeAgentUI" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = Packages/CodeAgentUI;
-		};
-/* End XCLocalSwiftPackageReference section */
+/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		D01D7D292FEBDF690097461D /* CoreKit */ = {
+		D02FE6322FF2C7730099797A /* AgentKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = CoreKit;
+			package = D02FE6312FF2C7730099797A /* XCRemoteSwiftPackageReference "AgentKit" */;
+			productName = AgentKit;
 		};
-		D01D7D2C2FEBDF7B0097461D /* DesignKit */ = {
+		D09F66A92FEF54C8001B7D87 /* AgentKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = DesignKit;
-		};
-		D01D7E9A2FEBE3310097461D /* CodeAgentUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = CodeAgentUI;
+			productName = AgentKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

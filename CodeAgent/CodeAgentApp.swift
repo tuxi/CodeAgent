@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import CoreKit
+import AgentKit
 
 @main
 struct CodeAgentApp: App {
