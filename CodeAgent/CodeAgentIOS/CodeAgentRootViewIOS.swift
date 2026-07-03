@@ -10,9 +10,13 @@
 import SwiftUI
 import AgentKit
 
-struct CodeAgentRootView: View {
 
+struct CodeAgentRootView: View {
     @Environment(AppContainer.self) private var container
+    
+    init() {
+
+    }
 
     var body: some View {
         WorkspaceView(dependencies: container.makeAgentDependencies())
