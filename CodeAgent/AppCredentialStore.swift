@@ -19,18 +19,23 @@ final class AppCredentialStore: CredentialStore, Sendable {
     
     func resolve(_ target: AgentKit.CredentialTarget) async throws -> AgentKit.Credential? {
         guard target == .gateway,
-               let token = await authManager.token
-        else {
-            return nil
-        }
-        return Credential(
-            kind: .bearer,
-            secret: token.accessToken,
-            expiresAt: token.accessExpireDate,
-            metadata: ["refresh_token": token.refreshToken]
-        )
+              let token = await authManager.token
+        else { return nil }
+        return makeCredential(accessToken: token.accessToken,
+                              refreshToken: token.refreshToken,
+                              expiresAt: token.accessExpireDate)
     }
-    
+
+    // WebSocket 连接时需要同步获取 Token，走 nonisolated accessor
+    func resolveSync(_ target: CredentialTarget) -> Credential? {
+        guard target == .gateway,
+              let accessToken = authManager.accessToken
+        else { return nil }
+        return makeCredential(accessToken: accessToken,
+                              refreshToken: authManager.refreshToken,
+                              expiresAt: nil)
+    }
+
     func all() async throws -> AgentKit.CredentialMap {
         var map = CredentialMap()
         if let cred = try await resolve(.gateway) {
@@ -47,8 +52,19 @@ final class AppCredentialStore: CredentialStore, Sendable {
         
     }
     
-    func clear() async throws {
-        
+    func clear() async throws {}
+
+    // MARK: - Private
+
+    private func makeCredential(accessToken: String,
+                                refreshToken: String?,
+                                expiresAt: Date?) -> Credential {
+        Credential(
+            kind: .bearer,
+            secret: accessToken,
+            expiresAt: expiresAt,
+            metadata: refreshToken.map { ["refresh_token": $0] } ?? [:]
+        )
     }
-    
+
 }

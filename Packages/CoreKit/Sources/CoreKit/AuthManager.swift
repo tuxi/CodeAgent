@@ -278,6 +278,8 @@ public final class AuthManager: Sendable {
     private let anonymousRegisterHandler: AnonymousRegisterHandler?
     private var isPerformingAnonymousRegister = false
 
+    private var isEnableAnonymousRegistration = false
+    
     public init(
         environment: AppEnvironment = .prod,
         tokenStore: AuthTokenStore = AuthTokenStore(),
@@ -350,6 +352,9 @@ public final class AuthManager: Sendable {
 
     // MARK: - 匿名注册
     private func performAnonymousRegistration() async {
+        if !isEnableAnonymousRegistration {
+            return
+        }
         guard let handler = anonymousRegisterHandler, !isPerformingAnonymousRegister else { return }
         isPerformingAnonymousRegister = true
         defer { isPerformingAnonymousRegister = false }

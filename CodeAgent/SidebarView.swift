@@ -21,7 +21,6 @@ public struct SidebarView: View {
     @Environment(AgentManager.self) private var agentManager
     @Environment(UserManager.self) private var userManager
     @State private var searchText = ""
-    @State private var isAccountMenuPresented = false
     @Binding var showSettings: Bool
 
     public var body: some View {
@@ -29,29 +28,18 @@ public struct SidebarView: View {
 
         VStack(spacing: 0) {
             newTaskButton
-                .simultaneousGesture(TapGesture().onEnded { dismissAccountMenu() }, including: .subviews)
 
             ConversationListView(
                 viewModel: store.listViewModel,
                 selected: $store.selectedConversation,
                 searchText: searchText
             )
-            .simultaneousGesture(TapGesture().onEnded { dismissAccountMenu() }, including: .subviews)
             #if os(macOS)
             Divider()
             footer
             #endif
         }
         .background(.ultraThinMaterial)
-        .overlay(alignment: .bottomLeading) {
-            if isAccountMenuPresented {
-                accountMenu
-                    .padding(.leading, 10)
-                    .padding(.bottom, 62)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-                    .zIndex(1)
-            }
-        }
         .navigationTitle(store.selectedTab.title)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -74,10 +62,19 @@ public struct SidebarView: View {
     }
 
     private var footer: some View {
-        Button {
-            withAnimation(.easeOut(duration: 0.16)) {
-                isAccountMenuPresented.toggle()
-            }
+        #if os(macOS)
+        AppMenu(
+            presentation: .fixedToTrigger(preferredEdge: .maxY)
+        ) { resizeMenu in
+            AccountMenuContent(
+                accountName: accountName,
+                accountInitial: accountInitial,
+                usage: agentManager.usage,
+                onContentSizeChange: resizeMenu,
+                onRefreshUsage: { Task { try? await agentManager.fetchUsage() } },
+                onSettings: { showSettings = true },
+                onLogout: { authManager.logout() }
+            )
         } label: {
             HStack(spacing: 10) {
                 Text(accountInitial)
@@ -93,14 +90,10 @@ public struct SidebarView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .layoutPriority(1)
 
-//                Image(systemName: "chevron.up")
-//                    .font(.system(size: 10, weight: .bold))
-//                    .foregroundStyle(.tertiary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 16)
         .padding(.vertical, 13)
@@ -109,75 +102,9 @@ public struct SidebarView: View {
             guard authManager.isLoggedIn, authManager.isRegistered else { return }
             await userManager.refreshProfileIfNeeded()
         }
-    }
-
-    private func dismissAccountMenu() {
-        guard isAccountMenuPresented else { return }
-        withAnimation(.easeOut(duration: 0.16)) {
-            isAccountMenuPresented = false
-        }
-    }
-
-    private var accountMenu: some View {
-        VStack(spacing: 3) {
-            HStack(spacing: 10) {
-                Text(accountInitial)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 28, height: 28)
-                    .background(Color.accentColor, in: Circle())
-                Text(accountName)
-                    .font(.system(size: 14, weight: .semibold))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-
-            Divider().padding(.horizontal, 8)
-
-            accountMenuRow(title: usageTitle, systemImage: "gauge.with.dots.needle.50percent") {
-                Task { try? await agentManager.fetchUsage() }
-            }
-            accountMenuRow(title: "设置", systemImage: "gearshape") {
-                isAccountMenuPresented = false
-                showSettings = true
-            }
-            accountMenuRow(
-                title: "退出登录",
-                systemImage: "rectangle.portrait.and.arrow.right",
-                isDestructive: true
-            ) {
-                isAccountMenuPresented = false
-                authManager.logout()
-            }
-        }
-        .padding(6)
-        .frame(width: 238)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-        }
-        .shadow(color: .black.opacity(0.18), radius: 16, x: 0, y: 7)
-    }
-
-    private func accountMenuRow(
-        title: String,
-        systemImage: String,
-        isDestructive: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(.system(size: 14, weight: .medium))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(isDestructive ? Color.red : Color.primary)
+        #else
+        EmptyView()
+        #endif
     }
 
     private var newTaskButton: some View {
@@ -237,3 +164,140 @@ public struct SidebarView: View {
         return "剩余用量：\(max(limit - usage.monthlyUnits, 0)) / \(limit)"
     }
 }
+
+#if os(macOS)
+private struct AccountMenuContent: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let accountName: String
+    let accountInitial: String
+    let usage: UsageInfo?
+    let onContentSizeChange: (CGSize) -> Void
+    let onRefreshUsage: () -> Void
+    let onSettings: () -> Void
+    let onLogout: () -> Void
+
+    @State private var isUsageExpanded = false
+
+    var body: some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 10) {
+                Text(accountInitial)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 28, height: 28)
+                    .background(Color.accentColor, in: Circle())
+                Text(accountName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    isUsageExpanded.toggle()
+                }
+                if isUsageExpanded { onRefreshUsage() }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "gauge.with.dots.needle.50percent")
+                        .frame(width: 18)
+                    Text("剩余用量")
+                    Spacer(minLength: 0)
+                    Image(systemName: isUsageExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.secondary)
+                }
+                .font(.system(size: 15, weight: .medium))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isUsageExpanded {
+                usageDetails
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            Divider()
+
+            menuRow("设置", systemImage: "gearshape") {
+                onSettings()
+                dismiss()
+            }
+            menuRow("退出登录", systemImage: "rectangle.portrait.and.arrow.right", isDestructive: true) {
+                onLogout()
+                dismiss()
+            }
+        }
+        .padding(6)
+        .frame(width: 280)
+        .onAppear { publishContentSize() }
+        .onChange(of: isUsageExpanded) { _, _ in publishContentSize() }
+    }
+
+    private var usageDetails: some View {
+        VStack(spacing: 9) {
+            usageLine("今日", value: formatted(usage?.dailyUnits), detail: "已使用")
+            usageLine("本周", value: formatted(usage?.weeklyUnits), detail: "已使用")
+            usageLine("本月", value: monthlyUsage, detail: "剩余额度")
+            if let model = usage?.currentModel {
+                usageLine("当前模型", value: model, detail: "")
+            }
+        }
+        .font(.system(size: 14, weight: .medium))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, 6)
+        .padding(.bottom, 4)
+    }
+
+    private func usageLine(_ title: String, value: String, detail: String) -> some View {
+        HStack(spacing: 8) {
+            Text(title).foregroundStyle(.secondary)
+            Spacer(minLength: 10)
+            Text(value).lineLimit(1)
+            if !detail.isEmpty { Text(detail).foregroundStyle(.tertiary) }
+        }
+    }
+
+    private func menuRow(
+        _ title: String,
+        systemImage: String,
+        isDestructive: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 15, weight: .medium))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isDestructive ? Color.red : Color.primary)
+    }
+
+    private var monthlyUsage: String {
+        guard let usage else { return "加载中" }
+        guard let limit = usage.monthlyLimit else { return "不限额" }
+        return "\(max(limit - usage.monthlyUnits, 0)) / \(limit)"
+    }
+
+    private func formatted(_ value: Int?) -> String {
+        guard let value else { return "加载中" }
+        return value >= 1_000 ? String(format: "%.1fK", Double(value) / 1_000) : "\(value)"
+    }
+
+    private func publishContentSize() {
+        onContentSizeChange(CGSize(width: 280, height: isUsageExpanded ? 330 : 184))
+    }
+}
+#endif
