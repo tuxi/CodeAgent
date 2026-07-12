@@ -9,13 +9,21 @@
 
 import SwiftUI
 import AgentKit
+import CoreKit
+import FeatureAuth
 
 struct CodeAgentRootView: View {
-
+    
     @Environment(AppContainer.self) private var container
 
     var body: some View {
-        WorkspaceView(dependencies: container.makeAgentDependencies())
+        
+        if !container.authManager.isLoggedIn {
+            WorkspaceView(dependencies: container.makeAgentDependencies())
+        } else {
+            AuthView(viewModel: container.makeAuthViewModel())
+        }
+        
     }
 }
 

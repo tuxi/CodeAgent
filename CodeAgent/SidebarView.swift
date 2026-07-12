@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AgentKit
+import CoreKit
 
 /// 最左侧栏：顶部一级 Tab 切换分区，下方为当前分区的会话列表。
 /// 列表点选通过 `store.selectedConversation` 驱动中间对话详情。
@@ -16,9 +17,10 @@ import AgentKit
 public struct SidebarView: View {
 
     @Environment(WorkspaceStore.self) private var store
-    @Environment(AccountManager.self) private var accountManager
+    @Environment(AuthManager.self) private var authManager
+    @Environment(AgentManager.self) private var agentManager
+    @Environment(UserManager.self) private var userManager
     @State private var searchText = ""
-    @State private var isAccountMenuPresented = false
     @Binding var showSettings: Bool
 
     public var body: some View {
@@ -60,8 +62,31 @@ public struct SidebarView: View {
     }
 
     private var footer: some View {
-        Button {
-            isAccountMenuPresented.toggle()
+        Menu {
+            Text(accountName)
+                .font(.system(size: 14, weight: .semibold))
+
+            Divider()
+
+            Button {
+                Task { try? await agentManager.fetchUsage() }
+            } label: {
+                Label(usageTitle, systemImage: "gauge.with.dots.needle.50percent")
+            }
+
+            Button {
+                showSettings = true
+            } label: {
+                Label("设置", systemImage: "gearshape")
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                authManager.logout()
+            } label: {
+                Label("退出登录", systemImage: "rectangle.portrait.and.arrow.right")
+            }
         } label: {
             HStack(spacing: 10) {
                 Text(accountInitial)
@@ -78,94 +103,11 @@ public struct SidebarView: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .menuStyle(.borderlessButton)
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 16)
         .padding(.vertical, 13)
         .accessibilityLabel("账户：\(accountName)")
-        .popover(
-            isPresented: $isAccountMenuPresented,
-            attachmentAnchor: .rect(.bounds),
-            arrowEdge: .bottom
-        ) {
-            accountMenu
-        }
-        .onChange(of: isAccountMenuPresented) { _, isPresented in
-            guard isPresented, accountManager.state.isAuthenticated else { return }
-            Task { try? await accountManager.fetchUsage() }
-        }
-    }
-
-    private var accountMenu: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Text(accountInitial)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 28, height: 28)
-                    .background(Color.accentColor, in: Circle())
-
-                Text(accountName)
-                    .font(.system(size: 15, weight: .semibold))
-                    .lineLimit(1)
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 13)
-
-            Divider().padding(.horizontal, 10)
-
-            accountMenuButton(
-                title: usageTitle,
-                systemImage: "gauge.with.dots.needle.50percent"
-            ) {}
-
-            accountMenuButton(title: "设置", systemImage: "gearshape") {
-                isAccountMenuPresented = false
-                showSettings = true
-            }
-
-            accountMenuButton(
-                title: "退出登录",
-                systemImage: "rectangle.portrait.and.arrow.right",
-                role: .destructive
-            ) {
-                isAccountMenuPresented = false
-                Task { try? await accountManager.logout() }
-            }
-        }
-        .frame(width: 244)
-        .padding(.vertical, 6)
-    }
-
-    private func accountMenuButton(
-        title: String,
-        systemImage: String,
-        role: ButtonRole? = nil,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(role: role, action: action) {
-            HStack(spacing: 11) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 15, weight: .medium))
-                    .frame(width: 18)
-                Text(title)
-                    .font(.system(size: 14, weight: .medium))
-                Spacer(minLength: 0)
-                if title == usageTitle {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(role == .destructive ? Color.red : Color.primary)
     }
 
     private var newTaskButton: some View {
@@ -190,16 +132,14 @@ public struct SidebarView: View {
     }
 
     private var accountName: String {
-        guard let account = accountManager.state.accountInfo else {
+        guard authManager.isLoggedIn else {
             return "未登录"
         }
-        if let displayName = account.displayName, !displayName.isEmpty {
-            return displayName
+        if let profile = userManager.profile {
+            return profile.nickname ?? profile.username
         }
-        if let email = account.email, !email.isEmpty {
-            return email
-        }
-        return account.userId
+        
+        return authManager.displayNickname ?? ""
     }
 
     private var accountInitial: String {
@@ -207,7 +147,7 @@ public struct SidebarView: View {
     }
 
     private var usageTitle: String {
-        guard let usage = accountManager.usage else { return "剩余用量" }
+        guard let usage = agentManager.usage else { return "剩余用量" }
         guard let limit = usage.monthlyLimit else { return "剩余用量：不限额" }
         return "剩余用量：\(max(limit - usage.monthlyUnits, 0)) / \(limit)"
     }

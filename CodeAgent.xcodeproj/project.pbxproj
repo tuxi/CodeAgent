@@ -7,7 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D02FE6332FF2C7730099797A /* AgentKit in Frameworks */ = {isa = PBXBuildFile; productRef = D02FE6322FF2C7730099797A /* AgentKit */; };
+		D0173BAC30026273004CC013 /* AgentKit in Frameworks */ = {isa = PBXBuildFile; productRef = D0173BAB30026273004CC013 /* AgentKit */; };
+		D0173EC63002A711004CC013 /* CoreKit in Frameworks */ = {isa = PBXBuildFile; productRef = D0173EC53002A711004CC013 /* CoreKit */; };
+		D0173EC93002A85F004CC013 /* FeatureAuth in Frameworks */ = {isa = PBXBuildFile; productRef = D0173EC83002A85F004CC013 /* FeatureAuth */; };
 		D09F66AA2FEF54C8001B7D87 /* AgentKit in Frameworks */ = {isa = PBXBuildFile; productRef = D09F66A92FEF54C8001B7D87 /* AgentKit */; };
 /* End PBXBuildFile section */
 
@@ -42,8 +44,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D0173EC63002A711004CC013 /* CoreKit in Frameworks */,
+				D0173EC93002A85F004CC013 /* FeatureAuth in Frameworks */,
 				D09F66AA2FEF54C8001B7D87 /* AgentKit in Frameworks */,
-				D02FE6332FF2C7730099797A /* AgentKit in Frameworks */,
+				D0173BAC30026273004CC013 /* AgentKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -96,7 +100,9 @@
 			name = CodeAgent;
 			packageProductDependencies = (
 				D09F66A92FEF54C8001B7D87 /* AgentKit */,
-				D02FE6322FF2C7730099797A /* AgentKit */,
+				D0173BAB30026273004CC013 /* AgentKit */,
+				D0173EC53002A711004CC013 /* CoreKit */,
+				D0173EC83002A85F004CC013 /* FeatureAuth */,
 			);
 			productName = CodeAgent;
 			productReference = D01D7D102FEBDBEA0097461D /* CodeAgent.app */;
@@ -127,7 +133,9 @@
 			mainGroup = D01D7D072FEBDBEA0097461D;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				D02FE6312FF2C7730099797A /* XCRemoteSwiftPackageReference "AgentKit" */,
+				D0173BAA30026273004CC013 /* XCLocalSwiftPackageReference "../AgentKit" */,
+				D0173EC43002A711004CC013 /* XCLocalSwiftPackageReference "Packages/CoreKit" */,
+				D0173EC73002A85F004CC013 /* XCLocalSwiftPackageReference "Packages/FeatureAuth" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D01D7D112FEBDBEA0097461D /* Products */;
@@ -291,6 +299,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = CodeAgent/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "CodeAgent 需要相机权限";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -301,10 +310,10 @@
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 26.1;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.objc.codeagent;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -313,12 +322,11 @@
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
-				XROS_DEPLOYMENT_TARGET = 26.2;
+				XROS_DEPLOYMENT_TARGET = 26.0;
 			};
 			name = Debug;
 		};
@@ -337,6 +345,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = CodeAgent/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "CodeAgent 需要相机权限";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -347,10 +356,10 @@
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 26.1;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.objc.codeagent;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -359,12 +368,11 @@
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
-				XROS_DEPLOYMENT_TARGET = 26.2;
+				XROS_DEPLOYMENT_TARGET = 26.0;
 			};
 			name = Release;
 		};
@@ -391,22 +399,33 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		D02FE6312FF2C7730099797A /* XCRemoteSwiftPackageReference "AgentKit" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/tuxi/AgentKit";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		D0173BAA30026273004CC013 /* XCLocalSwiftPackageReference "../AgentKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../AgentKit;
 		};
-/* End XCRemoteSwiftPackageReference section */
+		D0173EC43002A711004CC013 /* XCLocalSwiftPackageReference "Packages/CoreKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/CoreKit;
+		};
+		D0173EC73002A85F004CC013 /* XCLocalSwiftPackageReference "Packages/FeatureAuth" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/FeatureAuth;
+		};
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		D02FE6322FF2C7730099797A /* AgentKit */ = {
+		D0173BAB30026273004CC013 /* AgentKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D02FE6312FF2C7730099797A /* XCRemoteSwiftPackageReference "AgentKit" */;
 			productName = AgentKit;
+		};
+		D0173EC53002A711004CC013 /* CoreKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = CoreKit;
+		};
+		D0173EC83002A85F004CC013 /* FeatureAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = FeatureAuth;
 		};
 		D09F66A92FEF54C8001B7D87 /* AgentKit */ = {
 			isa = XCSwiftPackageProductDependency;
