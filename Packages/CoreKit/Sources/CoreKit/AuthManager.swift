@@ -57,7 +57,7 @@ public struct AuthToken: Codable, Sendable {
     }
 
     /// accessToken 过期时间
-    var accessExpireDate: Date {
+    public var accessExpireDate: Date {
         Date(timeIntervalSince1970: TimeInterval(accessExp))
     }
 

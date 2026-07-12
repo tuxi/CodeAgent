@@ -159,6 +159,10 @@ final class AppContainer {
         self.timelineExtensions = []
         #endif
 
+        // 注入 AgentKit 全局凭证存储：基于 AuthManager，不写 Keychain
+        let appCredentialStore = AppCredentialStore(authManager: authManager)
+        CredentialSettings.store = appCredentialStore
+
         // 从旧 AgentSettings 迁移到新 CredentialStore（仅一次）
         CredentialSettings.migrateFromLegacyIfNeeded()
 
@@ -179,9 +183,8 @@ final class AppContainer {
     /// 从 Gateway 获取模型列表并注入 ModelSettingsStore。
     private func refreshModelList() async {
         // 使用 authClient 直接获取模型列表
-        guard let token = try? await KeychainCredentialStore().resolve(.gateway)?.secret else { return }
         do {
-            let response = try await URLSessionAuthClient().getModels(accessToken: token)
+            let response = try await agentManager.fetchModels()
             modelSettings.setAvailableModels(response.models, defaultModel: response.defaultModel)
         } catch {
             print("Failed to fetch models from Gateway: \(error)")
@@ -230,7 +233,7 @@ final class AppContainer {
         #else
         // macOS: 连接独立运行的 CodeAgent server（127.0.0.1:8797）。
         let env = RuntimeEnvironment(host: "127.0.0.1", port: 8797)
-        let credentialStore = KeychainCredentialStore()
+        let credentialStore = AppCredentialStore(authManager: authManager)
         return DefaultAgentClient(environment: env, credentialStore: credentialStore)
         #endif
     }
@@ -241,9 +244,11 @@ final class AppContainer {
             toolRegistry: toolRegistry,
             timelineExtensions: timelineExtensions,
             onAuthExpired: { [agentManager] in
-//                guard (try? await agentManager.refreshGatewayToken()) != nil else { return }
+                // iOS: runtime 收到 401 → 用最新凭证热重载
+                // macOS: Token 刷新由 AuthManager 的 Alamofire RequestInterceptor 自动处理，
+                //        CredentialStore 每次请求实时读取 authManager.token，无需手动重载。
                 #if os(iOS)
-                try? await AgentRuntime.shared.reconfigure(with: KeychainCredentialStore())
+                try? await AgentRuntime.shared.reconfigure(with: AppCredentialStore(authManager: authManager))
                 #endif
             }
         )
@@ -254,14 +259,9 @@ final class AppContainer {
     private func injectCredentialsIntoRuntime() {
         #if os(iOS)
         Task {
-            if case .anonymous = accountManager.state {
-                await accountManager.restore()
-            }
-            if let _ = try? await accountManager.gatewayCredential() {
-                try? await AgentRuntime.shared.launch(with: KeychainCredentialStore())
-            } else {
-                try? AgentRuntime.shared.ensureStarted()
-            }
+            try? await AgentRuntime.shared.launch(
+                with: AppCredentialStore(authManager: authManager)
+            )
         }
         #endif
     }

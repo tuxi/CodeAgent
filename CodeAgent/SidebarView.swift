@@ -21,6 +21,7 @@ public struct SidebarView: View {
     @Environment(AgentManager.self) private var agentManager
     @Environment(UserManager.self) private var userManager
     @State private var searchText = ""
+    @State private var isAccountMenuPresented = false
     @Binding var showSettings: Bool
 
     public var body: some View {
@@ -28,18 +29,29 @@ public struct SidebarView: View {
 
         VStack(spacing: 0) {
             newTaskButton
+                .simultaneousGesture(TapGesture().onEnded { dismissAccountMenu() }, including: .subviews)
 
             ConversationListView(
                 viewModel: store.listViewModel,
                 selected: $store.selectedConversation,
                 searchText: searchText
             )
+            .simultaneousGesture(TapGesture().onEnded { dismissAccountMenu() }, including: .subviews)
             #if os(macOS)
             Divider()
             footer
             #endif
         }
         .background(.ultraThinMaterial)
+        .overlay(alignment: .bottomLeading) {
+            if isAccountMenuPresented {
+                accountMenu
+                    .padding(.leading, 10)
+                    .padding(.bottom, 62)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .zIndex(1)
+            }
+        }
         .navigationTitle(store.selectedTab.title)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -62,30 +74,9 @@ public struct SidebarView: View {
     }
 
     private var footer: some View {
-        Menu {
-            Text(accountName)
-                .font(.system(size: 14, weight: .semibold))
-
-            Divider()
-
-            Button {
-                Task { try? await agentManager.fetchUsage() }
-            } label: {
-                Label(usageTitle, systemImage: "gauge.with.dots.needle.50percent")
-            }
-
-            Button {
-                showSettings = true
-            } label: {
-                Label("设置", systemImage: "gearshape")
-            }
-
-            Divider()
-
-            Button(role: .destructive) {
-                authManager.logout()
-            } label: {
-                Label("退出登录", systemImage: "rectangle.portrait.and.arrow.right")
+        Button {
+            withAnimation(.easeOut(duration: 0.16)) {
+                isAccountMenuPresented.toggle()
             }
         } label: {
             HStack(spacing: 10) {
@@ -98,16 +89,95 @@ public struct SidebarView: View {
                 Text(accountName)
                     .font(.system(size: 14, weight: .medium))
                     .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(1)
 
-                Spacer(minLength: 0)
+//                Image(systemName: "chevron.up")
+//                    .font(.system(size: 10, weight: .bold))
+//                    .foregroundStyle(.tertiary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
+        .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 16)
         .padding(.vertical, 13)
         .accessibilityLabel("账户：\(accountName)")
+        .task {
+            guard authManager.isLoggedIn, authManager.isRegistered else { return }
+            await userManager.refreshProfileIfNeeded()
+        }
+    }
+
+    private func dismissAccountMenu() {
+        guard isAccountMenuPresented else { return }
+        withAnimation(.easeOut(duration: 0.16)) {
+            isAccountMenuPresented = false
+        }
+    }
+
+    private var accountMenu: some View {
+        VStack(spacing: 3) {
+            HStack(spacing: 10) {
+                Text(accountInitial)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 28, height: 28)
+                    .background(Color.accentColor, in: Circle())
+                Text(accountName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+
+            Divider().padding(.horizontal, 8)
+
+            accountMenuRow(title: usageTitle, systemImage: "gauge.with.dots.needle.50percent") {
+                Task { try? await agentManager.fetchUsage() }
+            }
+            accountMenuRow(title: "设置", systemImage: "gearshape") {
+                isAccountMenuPresented = false
+                showSettings = true
+            }
+            accountMenuRow(
+                title: "退出登录",
+                systemImage: "rectangle.portrait.and.arrow.right",
+                isDestructive: true
+            ) {
+                isAccountMenuPresented = false
+                authManager.logout()
+            }
+        }
+        .padding(6)
+        .frame(width: 238)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.18), radius: 16, x: 0, y: 7)
+    }
+
+    private func accountMenuRow(
+        title: String,
+        systemImage: String,
+        isDestructive: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 14, weight: .medium))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isDestructive ? Color.red : Color.primary)
     }
 
     private var newTaskButton: some View {
@@ -132,14 +202,29 @@ public struct SidebarView: View {
     }
 
     private var accountName: String {
-        guard authManager.isLoggedIn else {
-            return "未登录"
+        guard authManager.isLoggedIn else { return "未登录" }
+
+        let candidates = [
+            userManager.profile?.nickname,
+            authManager.displayNickname
+        ]
+        if let name = candidates.lazy.compactMap({ value -> String? in
+            guard let value else { return nil }
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }).first {
+            return name
         }
-        if let profile = userManager.profile {
-            return profile.nickname ?? profile.username
+
+        if let username = userManager.profile?.username.trimmingCharacters(in: .whitespacesAndNewlines),
+           !username.isEmpty,
+           !username.allSatisfy(\.isNumber) {
+            return username
         }
-        
-        return authManager.displayNickname ?? ""
+        if let userID = authManager.token?.userId {
+            return "用户 \(userID)"
+        }
+        return "账户"
     }
 
     private var accountInitial: String {

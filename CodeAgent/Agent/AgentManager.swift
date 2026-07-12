@@ -30,41 +30,18 @@ public final class AgentManager {
     let apiProvider: ApiProvider
     // MARK: - Published State
     public private(set) var usage: UsageInfo?
-    public private(set) var models: ModelsResponse?
 
     // MARK: - Dependencies
 
-    private let credentialStore: any CredentialStore
     private var refreshTask: Task<Void, Never>?
 
     // MARK: - Init
 
     public init(
         apiProvider: ApiProvider,
-        credentialStore: any CredentialStore = KeychainCredentialStore()
     ) {
-        self.credentialStore = credentialStore
         self.apiProvider = apiProvider
     }
-
-
-
-    /// 获取当前有效的 Gateway credential。
-    ///
-    /// 应在每次向 Runtime 注入 credential 前调用。
-    /// Layer 2 (Lazy)：token 快过期（< 5 分钟）时自动刷新。
-    /// 刷新失败不阻塞 —— 用即将过期的 token 继续（Gateway 可能拒绝，但不会 crash）。
-//    public func gatewayCredential() async throws -> Credential? {
-//        guard var cred = try? await credentialStore.resolve(.gateway) else {
-//            return nil
-//        }
-//        if cred.expiresWithin(seconds: 300) {
-//            if let refreshed = try? await refreshGatewayToken() {
-//                cred = refreshed
-//            }
-//        }
-//        return cred
-//    }
 
     // MARK: - Usage
 
@@ -74,9 +51,9 @@ public final class AgentManager {
         self.usage = usage
     }
     
-    public func fetchModels() async throws {
+    public func fetchModels() async throws -> ModelsResponse {
         let models: ModelsResponse = try await apiProvider.request(endpoint: AgentApi.models)
-        self.models = models
+        return models
     }
 }
 

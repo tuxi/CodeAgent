@@ -53,7 +53,7 @@ public final class CredentialSettingsStore {
 
     private let store: any CredentialStore
 
-    public init(store: any CredentialStore = KeychainCredentialStore()) {
+    public init(store: any CredentialStore) {
         self.store = store
         self.model = AgentSettings.model
         self.byokProviders = [

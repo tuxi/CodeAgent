@@ -18,7 +18,7 @@ struct CodeAgentRootView: View {
 
     var body: some View {
         
-        if !container.authManager.isLoggedIn {
+        if container.authManager.isLoggedIn {
             WorkspaceView(dependencies: container.makeAgentDependencies())
         } else {
             AuthView(viewModel: container.makeAuthViewModel())
