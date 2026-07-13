@@ -92,6 +92,9 @@ final class AppContainer {
     /// Product-specific additions to AgentKit's otherwise generic Timeline.
     let timelineExtensions: [any TimelineExtension]
 
+    /// Host-owned system notification and notification-click routing state.
+    let conversationNotifications: ConversationNotificationCoordinator
+
     // MARK: - Dreamlog 业务层（示例：如何在真实 App 中集成）
 
     /// Dreamlog 网络层 —— 基于 Alamofire 的 API 请求。
@@ -152,6 +155,7 @@ final class AppContainer {
         self.modelSettings = ModelSettingsStore()
 
         self.toolRegistry = ToolRegistry()
+        self.conversationNotifications = ConversationNotificationCoordinator()
 
         #if os(macOS)
         self.timelineExtensions = [DesktopControlEvidenceTimeline()]
@@ -243,13 +247,16 @@ final class AppContainer {
             client: makeAgentClient(),
             toolRegistry: toolRegistry,
             timelineExtensions: timelineExtensions,
-            onAuthExpired: { [agentManager] in
+            onAuthExpired: { [authManager] in
                 // iOS: runtime 收到 401 → 用最新凭证热重载
                 // macOS: Token 刷新由 AuthManager 的 Alamofire RequestInterceptor 自动处理，
                 //        CredentialStore 每次请求实时读取 authManager.token，无需手动重载。
                 #if os(iOS)
                 try? await AgentRuntime.shared.reconfigure(with: AppCredentialStore(authManager: authManager))
                 #endif
+            },
+            onAttentionEvent: { [conversationNotifications] event in
+                conversationNotifications.handle(event)
             }
         )
     }

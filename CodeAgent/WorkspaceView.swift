@@ -19,6 +19,7 @@ public struct WorkspaceView: View {
 
     private let dependencies: AgentDependencies
 
+    @Environment(AppContainer.self) private var container
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
 
@@ -61,6 +62,13 @@ public struct WorkspaceView: View {
                 @unknown default:
                     break
                 }
+            }
+            .onDisappear {
+                store.handleWorkspaceDisappeared()
+            }
+            .onChange(of: container.conversationNotifications.pendingSessionID, initial: true) { _, sessionID in
+                guard let sessionID else { return }
+                Task { await openNotificationSession(sessionID) }
             }
     }
 
@@ -120,6 +128,19 @@ public struct WorkspaceView: View {
     private func pushToDetailIfNeeded(_ destination: AgentNavigationDestination) {
         guard router.path.isEmpty else { return }
         router.navigate(to: destination)
+    }
+
+    private func openNotificationSession(_ sessionID: String) async {
+        if !store.listViewModel.conversations.contains(where: { $0.id == sessionID }) {
+            await store.listViewModel.refresh()
+        }
+        store.selectConversation(sessionID: sessionID)
+        guard let conversation = store.selectedConversation, conversation.id == sessionID else { return }
+
+        if horizontalSizeClass == .compact {
+            router.path = [.conversationDetail(conversation: conversation)]
+        }
+        container.conversationNotifications.consumePendingSessionID(sessionID)
     }
 
     // MARK: - iPad / macOS (regular) — NavigationSplitView
