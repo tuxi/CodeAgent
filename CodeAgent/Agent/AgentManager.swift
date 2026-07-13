@@ -45,10 +45,15 @@ public final class AgentManager {
 
     // MARK: - Usage
 
-    public func fetchUsage() async throws {
-        
-        let usage: UsageInfo = try await apiProvider.request(endpoint: AgentApi.usage)
-        self.usage = usage
+    public func fetchUsage() {
+        Task {
+            do {
+                let usage: UsageInfo = try await apiProvider.request(endpoint: AgentApi.usage)
+                self.usage = usage
+            } catch {
+                DLLog(error)
+            }
+        }
     }
     
     public func fetchModels() async throws -> ModelsResponse {

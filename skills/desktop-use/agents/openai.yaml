@@ -1,0 +1,4 @@
+interface:
+  display_name: "Desktop Use"
+  short_description: "Safe desktop UI operation through MCP"
+  default_prompt: "Use $desktop-use to inspect, operate, and verify a desktop UI safely."

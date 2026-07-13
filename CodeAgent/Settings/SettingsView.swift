@@ -38,7 +38,7 @@ public struct SettingsView: View {
         .navigationSplitViewStyle(.balanced)
         .task {
             if authManager.isLoggedIn {
-                try? await agentManager.fetchUsage()
+                agentManager.fetchUsage()
             }
         }
     }
@@ -219,10 +219,10 @@ public struct SettingsView: View {
     private var profileMetricCard: some View {
         if let usage = agentManager.usage {
             HStack(spacing: 0) {
-                ProfileMetric(value: formatted(usage.dailyUnits), label: "今日用量")
-                ProfileMetric(value: formatted(usage.weeklyUnits), label: "本周用量")
-                ProfileMetric(value: formatted(usage.monthlyUnits), label: "本月用量")
-                ProfileMetric(value: usage.subscriptionTier.rawValue.capitalized, label: "当前方案")
+                ProfileMetric(value: formatted(usage.fiveHour.unitsUsed), label: "5小时用量")
+                ProfileMetric(value: formatted(usage.weekly.unitsUsed), label: "本周用量")
+                ProfileMetric(value: formatted(usage.monthly.unitsUsed), label: "本月用量")
+                ProfileMetric(value: usage.tier.rawValue.capitalized, label: "当前方案")
             }
             .padding(.vertical, 18)
             .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -239,8 +239,8 @@ public struct SettingsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("活动洞察")
                     .font(.system(size: 18, weight: .semibold))
-                ProfileKeyValue(title: "已使用的会话", value: "\(usage.monthlyUnits) 单位")
-                ProfileKeyValue(title: "当前模型", value: usage.currentModel ?? "自动选择")
+                ProfileKeyValue(title: "本月已使用", value: "\(formatted(usage.monthly.unitsUsed)) 单位")
+//                ProfileKeyValue(title: "当前模型", value: usage.byModel.first?.model ?? "自动选择")
                 ProfileKeyValue(title: "工作区权限", value: defaultPermission ? "已启用" : "按需请求")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -253,7 +253,7 @@ public struct SettingsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("用量")
                     .font(.system(size: 18, weight: .semibold))
-                ProfileKeyValue(title: "订阅方案", value: usage.subscriptionTier.rawValue.capitalized)
+                ProfileKeyValue(title: "订阅方案", value: usage.tier.rawValue.capitalized)
                 ProfileKeyValue(title: "本月额度", value: monthlyQuotaText)
                 ProfileKeyValue(title: "登录状态", value: authManager.isLoggedIn ? "已登录" : "未登录")
             }
@@ -271,7 +271,7 @@ public struct SettingsView: View {
                 }
                 if let usage = agentManager.usage {
                     SettingsValueRow(title: "订阅方案", description: "当前服务等级") {
-                        Text(usage.subscriptionTier.rawValue.capitalized)
+                        Text(usage.tier.rawValue.capitalized)
                             .settingsPickerCapsule()
                     }
                 }
@@ -336,16 +336,18 @@ public struct SettingsView: View {
     }
 
     private var accountInitial: String { String(accountName.prefix(1)).uppercased() }
-    private var accountSubtitle: String { agentManager.usage?.subscriptionTier.rawValue.capitalized ?? "CodeAgent 用户" }
+    private var accountSubtitle: String { agentManager.usage?.tier.rawValue.capitalized ?? "CodeAgent 用户" }
 
     private var monthlyQuotaText: String {
         guard let usage = agentManager.usage else { return "暂不可用" }
-        guard let limit = usage.monthlyLimit else { return "不限额" }
-        return "\(max(limit - usage.monthlyUnits, 0)) / \(limit) 剩余"
+        let remaining = max(usage.monthly.unitsLimit - usage.monthly.unitsUsed, 0)
+        return "\(formatted(remaining)) / \(formatted(usage.monthly.unitsLimit)) 剩余"
     }
 
     private func formatted(_ value: Int) -> String {
-        value >= 1_000 ? String(format: "%.1fK", Double(value) / 1_000) : "\(value)"
+        value >= 1_000_000
+            ? String(format: "%.1fM", Double(value) / 1_000_000)
+            : (value >= 1_000 ? String(format: "%.1fK", Double(value) / 1_000) : "\(value)")
     }
 }
 

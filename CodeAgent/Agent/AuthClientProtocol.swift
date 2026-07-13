@@ -64,12 +64,56 @@ public struct AuthResponse: Codable, Sendable {
 
 /// 用量信息。
 public struct UsageInfo: Codable, Sendable {
-    public let dailyUnits: Int
-    public let weeklyUnits: Int
-    public let monthlyUnits: Int
-    public let monthlyLimit: Int?
-    public let currentModel: String?
-    public let subscriptionTier: SubscriptionTier
+    public let fiveHour: Units
+    public let weekly: Units
+    public let monthly: Units
+//    public let byModel: [ModelUsage]
+    public let purchasedUnits: Int
+    public let mode: UsageMode
+    public let tier: SubscriptionTier
+    
+    public struct Units: Codable, Sendable {
+        public let unitsUsed: Int
+        public let unitsLimit: Int
+        public let tokensUsed: Int
+        public let utilizationPct: Float64
+        public let resetsAt: String
+        
+        enum CodingKeys: String, CodingKey {
+            case unitsUsed = "units_used"
+            case unitsLimit = "units_limit"
+            case tokensUsed = "tokens_used"
+            case utilizationPct = "utilization_pct"
+            case resetsAt = "resets_at"
+        }
+    }
+    
+    public struct ModelUsage: Codable, Sendable, Identifiable {
+        public let model: String
+        public let unitsUsed: Int
+        public let tokensUsed: Int
+        public let callCount: Int
+
+        public var id: String { model }
+        
+        enum CodingKeys: String, CodingKey {
+            case model
+            case unitsUsed = "units_used"
+            case tokensUsed = "tokens_used"
+            case callCount = "call_count"
+        }
+    }
+
+    public enum UsageMode: String, Codable, Sendable {
+        case managed
+        case byok
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case weekly, monthly, mode, tier
+        case fiveHour = "five_hour"
+        case purchasedUnits = "purchased_units"
+    }
 }
 
 // MARK: - Errors

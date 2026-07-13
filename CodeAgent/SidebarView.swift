@@ -41,16 +41,16 @@ public struct SidebarView: View {
         }
         .background(.ultraThinMaterial)
         .navigationTitle(store.selectedTab.title)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showSettings = true
-                } label: {
-                    Image(systemName: "gearshape")
-                }
-                .accessibilityLabel("设置")
-            }
-        }
+//        .toolbar {
+//            ToolbarItem(placement: .primaryAction) {
+//                Button {
+//                    showSettings = true
+//                } label: {
+//                    Image(systemName: "gearshape")
+//                }
+//                .accessibilityLabel("设置")
+//            }
+//        }
         #if os(iOS)
         .searchable(
             text: $searchText,
@@ -71,7 +71,9 @@ public struct SidebarView: View {
                 accountInitial: accountInitial,
                 usage: agentManager.usage,
                 onContentSizeChange: resizeMenu,
-                onRefreshUsage: { Task { try? await agentManager.fetchUsage() } },
+                onRefreshUsage: {
+                    agentManager.fetchUsage() 
+                },
                 onSettings: { showSettings = true },
                 onLogout: { authManager.logout() }
             )
@@ -101,6 +103,7 @@ public struct SidebarView: View {
         .task {
             guard authManager.isLoggedIn, authManager.isRegistered else { return }
             await userManager.refreshProfileIfNeeded()
+            agentManager.fetchUsage()
         }
         #else
         EmptyView()
@@ -160,8 +163,14 @@ public struct SidebarView: View {
 
     private var usageTitle: String {
         guard let usage = agentManager.usage else { return "剩余用量" }
-        guard let limit = usage.monthlyLimit else { return "剩余用量：不限额" }
-        return "剩余用量：\(max(limit - usage.monthlyUnits, 0)) / \(limit)"
+        let remaining = max(usage.monthly.unitsLimit - usage.monthly.unitsUsed, 0)
+        return "剩余用量：\(formattedUnits(remaining)) / \(formattedUnits(usage.monthly.unitsLimit))"
+    }
+
+    private func formattedUnits(_ value: Int) -> String {
+        value >= 1_000_000
+            ? String(format: "%.1fM", Double(value) / 1_000_000)
+            : (value >= 1_000 ? String(format: "%.1fK", Double(value) / 1_000) : "\(value)")
     }
 }
 
@@ -242,12 +251,36 @@ private struct AccountMenuContent: View {
     }
 
     private var usageDetails: some View {
-        VStack(spacing: 9) {
-            usageLine("今日", value: formatted(usage?.dailyUnits), detail: "已使用")
-            usageLine("本周", value: formatted(usage?.weeklyUnits), detail: "已使用")
-            usageLine("本月", value: monthlyUsage, detail: "剩余额度")
-            if let model = usage?.currentModel {
-                usageLine("当前模型", value: model, detail: "")
+        VStack(alignment: .leading, spacing: 11) {
+            if let usage {
+                usageLine("5小时", metric: usage.fiveHour)
+                usageLine("本周", metric: usage.weekly)
+                usageLine("本月", metric: usage.monthly)
+
+//                if !usage.byModel.isEmpty {
+//                    Divider().padding(.vertical, 1)
+//                    Text("模型用量")
+//                        .font(.system(size: 12, weight: .semibold))
+//                        .foregroundStyle(.secondary)
+//                    ForEach(usage.byModel) { model in
+//                        HStack(spacing: 8) {
+//                            VStack(alignment: .leading, spacing: 2) {
+//                                Text(model.model).lineLimit(1)
+//                                Text("\(model.callCount) 次调用 · \(formatted(model.tokensUsed)) tokens")
+//                                    .font(.system(size: 12))
+//                                    .foregroundStyle(.tertiary)
+//                            }
+//                            Spacer(minLength: 8)
+//                            Text(formatted(model.unitsUsed))
+//                                .foregroundStyle(.secondary)
+//                        }
+//                    }
+//                }
+            } else {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("正在获取用量…").foregroundStyle(.secondary)
+                }
             }
         }
         .font(.system(size: 14, weight: .medium))
@@ -258,12 +291,22 @@ private struct AccountMenuContent: View {
         .padding(.bottom, 4)
     }
 
-    private func usageLine(_ title: String, value: String, detail: String) -> some View {
-        HStack(spacing: 8) {
-            Text(title).foregroundStyle(.secondary)
-            Spacer(minLength: 10)
-            Text(value).lineLimit(1)
-            if !detail.isEmpty { Text(detail).foregroundStyle(.tertiary) }
+    private func usageLine(_ title: String, metric: UsageInfo.Units) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Text(title).foregroundStyle(.secondary)
+                Spacer(minLength: 10)
+                Text("\(formatted(metric.unitsUsed)) / \(formatted(metric.unitsLimit))")
+                Text(String(format: "%.1f%%", metric.utilizationPct))
+                    .foregroundStyle(metric.utilizationPct >= 90 ? Color.orange : Color.secondary)
+            }
+            HStack {
+                Text("剩余 \(formatted(max(metric.unitsLimit - metric.unitsUsed, 0)))")
+                Spacer()
+                Text("重置 \(formattedResetDate(metric.resetsAt))")
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(.tertiary)
         }
     }
 
@@ -285,19 +328,22 @@ private struct AccountMenuContent: View {
         .foregroundStyle(isDestructive ? Color.red : Color.primary)
     }
 
-    private var monthlyUsage: String {
-        guard let usage else { return "加载中" }
-        guard let limit = usage.monthlyLimit else { return "不限额" }
-        return "\(max(limit - usage.monthlyUnits, 0)) / \(limit)"
+    private func formatted(_ value: Int) -> String {
+        value >= 1_000_000
+            ? String(format: "%.1fM", Double(value) / 1_000_000)
+            : (value >= 1_000 ? String(format: "%.1fK", Double(value) / 1_000) : "\(value)")
     }
 
-    private func formatted(_ value: Int?) -> String {
-        guard let value else { return "加载中" }
-        return value >= 1_000 ? String(format: "%.1fK", Double(value) / 1_000) : "\(value)"
+    private func formattedResetDate(_ value: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        guard let date = formatter.date(from: value) else { return value }
+        return date.formatted(.dateTime.month(.abbreviated).day().hour().minute())
     }
 
     private func publishContentSize() {
-        onContentSizeChange(CGSize(width: 280, height: isUsageExpanded ? 330 : 184))
+//        let modelsHeight = CGFloat(usage?.byModel.count ?? 0) * 38
+        let modelsHeight = 0.0
+        onContentSizeChange(CGSize(width: 300, height: isUsageExpanded ? 305 + modelsHeight : 184))
     }
 }
 #endif
