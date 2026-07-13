@@ -34,7 +34,9 @@ public struct WorkspaceView: View {
             client: dependencies.client,
             toolRegistry: dependencies.toolRegistry,
             timelineExtensions: dependencies.timelineExtensions,
-            onAuthExpired: dependencies.onAuthExpired
+            onAuthExpired: dependencies.onAuthExpired,
+            attentionReadStore: dependencies.attentionReadStore,
+            onAttentionEvent: dependencies.onAttentionEvent
         ))
     }
 
