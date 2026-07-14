@@ -36,6 +36,7 @@ public struct WorkspaceView: View {
             toolRegistry: dependencies.toolRegistry,
             timelineExtensions: dependencies.timelineExtensions,
             onAuthExpired: dependencies.onAuthExpired,
+            localStateStore: dependencies.localStateStore,
             attentionReadStore: dependencies.attentionReadStore,
             onAttentionEvent: dependencies.onAttentionEvent
         ))
@@ -54,9 +55,7 @@ public struct WorkspaceView: View {
                 case .active:
                     Task { await store.handleAppBecameActive() }
                 case .background:
-                    #if os(iOS)
                     store.handleAppEnteredBackground()
-                    #endif
                 case .inactive:
                     break
                 @unknown default:
