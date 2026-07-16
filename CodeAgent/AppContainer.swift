@@ -247,6 +247,7 @@ final class AppContainer {
             client: makeAgentClient(),
             toolRegistry: toolRegistry,
             timelineExtensions: timelineExtensions,
+            conversationRendererMode: .web,
             onAuthExpired: { [authManager] in
                 // iOS: runtime 收到 401 → 用最新凭证热重载
                 // macOS: Token 刷新由 AuthManager 的 Alamofire RequestInterceptor 自动处理，

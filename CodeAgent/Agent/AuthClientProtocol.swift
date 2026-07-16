@@ -64,11 +64,18 @@ public struct AuthResponse: Codable, Sendable {
 
 /// 用量信息。
 public struct UsageInfo: Codable, Sendable {
-    public let fiveHour: Units
+    /// `weekly_only` 发布后固定为 weekly。保留该字段是为了兼容旧响应，UI 不应展示它。
+    public let quotaPolicy: QuotaPolicy?
+    public let fiveHour: Units?
     public let weekly: Units
-    public let monthly: Units
-//    public let byModel: [ModelUsage]
+    /// 付费方案的订阅周期上限；Free 用户为 nil。
+    public let subscriptionCycle: Units?
+    /// 后端的兼容别名。新界面一律优先使用 `subscriptionCycle`。
+    public let monthly: Units?
+    public let byModel: [ModelUsage]?
     public let purchasedUnits: Int
+    public let currentFundingSource: FundingSource?
+    public let resetCards: ResetCardSummary?
     public let mode: UsageMode
     public let tier: SubscriptionTier
     
@@ -104,15 +111,72 @@ public struct UsageInfo: Codable, Sendable {
         }
     }
 
+    public struct ResetCardSummary: Codable, Sendable {
+        public let availableCount: Int
+        public let active: ResetCard?
+        public let items: [ResetCard]
+
+        enum CodingKeys: String, CodingKey {
+            case availableCount = "available_count"
+            case active, items
+        }
+    }
+
+    public struct ResetCard: Codable, Sendable, Identifiable {
+        public let cardID: String
+        public let grantUnits: Int
+        public let remainingUnits: Int
+        public let planCodeSnapshot: String?
+        public let source: String?
+        public let status: Status
+        public let issuedAt: String?
+        public let expiresAt: String?
+        public let consumedAt: String?
+        public let windowEndsAt: String?
+
+        public var id: String { cardID }
+
+        public enum Status: String, Codable, Sendable { case available, consumed, expired, revoked }
+
+        enum CodingKeys: String, CodingKey {
+            case cardID = "card_id"
+            case grantUnits = "grant_units"
+            case remainingUnits = "remaining_units"
+            case planCodeSnapshot = "plan_code_snapshot"
+            case source, status
+            case issuedAt = "issued_at"
+            case expiresAt = "expires_at"
+            case consumedAt = "consumed_at"
+            case windowEndsAt = "window_ends_at"
+        }
+    }
+
     public enum UsageMode: String, Codable, Sendable {
         case managed
         case byok
     }
 
+    public enum QuotaPolicy: String, Codable, Sendable { case weeklyOnly = "weekly_only" }
+
+    public enum FundingSource: String, Codable, Sendable {
+        case subscription, resetCard = "reset_card", purchased, campaign, adminGrant = "admin_grant"
+    }
+
+    /// 付费用户展示订阅周期；Free 用户不会回退到废弃月字段。
+    public var cycle: Units? { subscriptionCycle ?? monthly }
+
+    public var availableResetCards: [ResetCard] {
+        (resetCards?.items ?? []).filter { $0.status == .available }
+    }
+
     enum CodingKeys: String, CodingKey {
-        case weekly, monthly, mode, tier
+        case weekly, monthly, mode, tier, byModel = "by_model"
         case fiveHour = "five_hour"
+        case quotaPolicy = "quota_policy"
+        case subscriptionCycle = "subscription_cycle"
         case purchasedUnits = "purchased_units"
+        case currentFundingSource = "current_funding_source"
+        case resetCards = "reset_cards"
     }
 }
 

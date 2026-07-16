@@ -14,6 +14,7 @@ import AuthenticationServices
 /// Apple 使用系统授权控件，手机验证码沿用现有 Gateway 登录流程。
 public struct AuthView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openURL) private var openURL
 
     @State private var viewModel: AuthViewModel
     @State private var isAgreementAccepted = true
@@ -62,11 +63,17 @@ public struct AuthView: View {
         .onChange(of: viewModel.captcha) { _, _ in viewModel.sanitizeCaptchaInput() }
         .onAppear { Task { await viewModel.checkOneTapAvailability() } }
         .sheet(item: $agreementURL) { url in
-            NavigationStack { BrowserView(url: url) }
+            NavigationStack {
+                BrowserView(url: url)
+            }
         }
         .environment(\.openURL, OpenURLAction { url in
-            agreementURL = url
+#if os(macOS)
+            return .systemAction // MacOS 打开浏览器
+#else
+            agreementURL = url // iOS 使用app内浏览器BrowserView
             return .handled
+#endif
         })
     }
 }

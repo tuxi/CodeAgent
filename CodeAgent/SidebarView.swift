@@ -70,10 +70,14 @@ public struct SidebarView: View {
                 accountName: accountName,
                 accountInitial: accountInitial,
                 usage: agentManager.usage,
+                isRedeemingResetCard: agentManager.isRedeemingResetCard,
+                usageError: agentManager.usageError,
                 onContentSizeChange: resizeMenu,
                 onRefreshUsage: {
                     agentManager.fetchUsage() 
                 },
+                onRefreshCards: { agentManager.refreshResetCards() },
+                onRedeemResetCard: { agentManager.redeemResetCard($0) },
                 onSettings: { showSettings = true },
                 onLogout: { authManager.logout() }
             )
@@ -163,8 +167,8 @@ public struct SidebarView: View {
 
     private var usageTitle: String {
         guard let usage = agentManager.usage else { return "剩余用量" }
-        let remaining = max(usage.monthly.unitsLimit - usage.monthly.unitsUsed, 0)
-        return "剩余用量：\(formattedUnits(remaining)) / \(formattedUnits(usage.monthly.unitsLimit))"
+        let remaining = max(usage.weekly.unitsLimit - usage.weekly.unitsUsed, 0)
+        return "剩余用量：\(formattedUnits(remaining)) / \(formattedUnits(usage.weekly.unitsLimit))"
     }
 
     private func formattedUnits(_ value: Int) -> String {
@@ -181,12 +185,17 @@ private struct AccountMenuContent: View {
     let accountName: String
     let accountInitial: String
     let usage: UsageInfo?
+    let isRedeemingResetCard: Bool
+    let usageError: String?
     let onContentSizeChange: (CGSize) -> Void
     let onRefreshUsage: () -> Void
+    let onRefreshCards: () -> Void
+    let onRedeemResetCard: (UsageInfo.ResetCard) -> Void
     let onSettings: () -> Void
     let onLogout: () -> Void
 
     @State private var isUsageExpanded = false
+    @State private var selectedResetCard: UsageInfo.ResetCard?
 
     var body: some View {
         VStack(spacing: 4) {
@@ -210,7 +219,10 @@ private struct AccountMenuContent: View {
                 withAnimation(.easeInOut(duration: 0.18)) {
                     isUsageExpanded.toggle()
                 }
-                if isUsageExpanded { onRefreshUsage() }
+                if isUsageExpanded {
+                    onRefreshUsage()
+                    onRefreshCards()
+                }
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "gauge.with.dots.needle.50percent")
@@ -248,34 +260,46 @@ private struct AccountMenuContent: View {
         .frame(width: 280)
         .onAppear { publishContentSize() }
         .onChange(of: isUsageExpanded) { _, _ in publishContentSize() }
+        .sheet(item: $selectedResetCard) { card in
+            ResetCardSheet(
+                card: card,
+                isRedeeming: isRedeemingResetCard,
+                errorMessage: usageError,
+                onRedeem: { onRedeemResetCard(card) }
+            )
+        }
     }
 
     private var usageDetails: some View {
         VStack(alignment: .leading, spacing: 11) {
             if let usage {
-                usageLine("5小时", metric: usage.fiveHour)
-                usageLine("本周", metric: usage.weekly)
-                usageLine("本月", metric: usage.monthly)
+                usageLine("1周", metric: usage.weekly)
 
-//                if !usage.byModel.isEmpty {
-//                    Divider().padding(.vertical, 1)
-//                    Text("模型用量")
-//                        .font(.system(size: 12, weight: .semibold))
-//                        .foregroundStyle(.secondary)
-//                    ForEach(usage.byModel) { model in
-//                        HStack(spacing: 8) {
-//                            VStack(alignment: .leading, spacing: 2) {
-//                                Text(model.model).lineLimit(1)
-//                                Text("\(model.callCount) 次调用 · \(formatted(model.tokensUsed)) tokens")
-//                                    .font(.system(size: 12))
-//                                    .foregroundStyle(.tertiary)
-//                            }
-//                            Spacer(minLength: 8)
-//                            Text(formatted(model.unitsUsed))
-//                                .foregroundStyle(.secondary)
-//                        }
-//                    }
-//                }
+                if let card = usage.availableResetCards.first {
+                    Divider().padding(.vertical, 1)
+                    Button { selectedResetCard = card } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.counterclockwise.circle")
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("使用限额重置")
+                                Text("可用 \(usage.resetCards?.availableCount ?? 1) 次 · \(formattedResetDate(card.expiresAt)) 到期")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if usage.currentFundingSource == .resetCard {
+                    Label("当前周额度来自重置卡", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.green)
+                }
             } else {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -334,16 +358,85 @@ private struct AccountMenuContent: View {
             : (value >= 1_000 ? String(format: "%.1fK", Double(value) / 1_000) : "\(value)")
     }
 
-    private func formattedResetDate(_ value: String) -> String {
+    private func formattedResetDate(_ value: String?) -> String {
+        guard let value else { return "—" }
         let formatter = ISO8601DateFormatter()
         guard let date = formatter.date(from: value) else { return value }
         return date.formatted(.dateTime.month(.abbreviated).day().hour().minute())
     }
 
     private func publishContentSize() {
-//        let modelsHeight = CGFloat(usage?.byModel.count ?? 0) * 38
-        let modelsHeight = 0.0
-        onContentSizeChange(CGSize(width: 300, height: isUsageExpanded ? 305 + modelsHeight : 184))
+        let resetCardHeight = usage?.availableResetCards.isEmpty == false ? 61.0 : 0
+        onContentSizeChange(CGSize(width: 300, height: isUsageExpanded ? 245 + resetCardHeight : 184))
+    }
+}
+
+private struct ResetCardSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let card: UsageInfo.ResetCard
+    let isRedeeming: Bool
+    let errorMessage: String?
+    let onRedeem: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            HStack {
+                Text("使用量")
+                    .font(.system(size: 25, weight: .bold))
+                Spacer()
+                Button { dismiss() } label: { Image(systemName: "xmark") }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 13) {
+                HStack {
+                    Text("每周使用限额")
+                        .font(.system(size: 16, weight: .semibold))
+                    Spacer()
+                    Text("将立即重新开始一周")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+                Text("使用重置卡会结束当前周窗口，并从现在开始创建新的 7 天额度。")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(18)
+            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Full reset")
+                            .font(.system(size: 17, weight: .semibold))
+                        Text("\(formattedDate(card.expiresAt)) 到期")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button(isRedeeming ? "正在使用…" : "使用重置") { onRedeem() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isRedeeming)
+                }
+                if let errorMessage {
+                    Text(errorMessage).font(.system(size: 13)).foregroundStyle(.red)
+                }
+            }
+            .padding(18)
+            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            Text("重置成功后，此卡会被核销且不能撤销。")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+        }
+        .padding(28)
+        .frame(width: 500)
+    }
+
+    private func formattedDate(_ value: String?) -> String {
+        guard let value, let date = ISO8601DateFormatter().date(from: value) else { return "—" }
+        return date.formatted(.dateTime.month(.abbreviated).day())
     }
 }
 #endif

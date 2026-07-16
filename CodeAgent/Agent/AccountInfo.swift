@@ -35,6 +35,10 @@ public struct AccountInfo: Codable, Sendable, Equatable {
 public enum SubscriptionTier: String, Codable, Sendable, Equatable, CaseIterable {
     case free
     case pro
+    case pro5x = "pro_5x"
+    case pro20x = "pro_20x"
+    case power
+    case ultimate
     case team
     case enterprise
 }

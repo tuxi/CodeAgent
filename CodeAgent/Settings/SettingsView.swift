@@ -110,7 +110,9 @@ public struct SettingsView: View {
                     generalSettings
                 case .profile:
                     profileSettings
-                case .account, .usage:
+                case .usage:
+                    usageBillingSettings
+                case .account:
                     accountSettings
                 default:
                     unavailableSettings
@@ -219,9 +221,8 @@ public struct SettingsView: View {
     private var profileMetricCard: some View {
         if let usage = agentManager.usage {
             HStack(spacing: 0) {
-                ProfileMetric(value: formatted(usage.fiveHour.unitsUsed), label: "5小时用量")
                 ProfileMetric(value: formatted(usage.weekly.unitsUsed), label: "本周用量")
-                ProfileMetric(value: formatted(usage.monthly.unitsUsed), label: "本月用量")
+                ProfileMetric(value: formatted(usage.cycle?.unitsUsed ?? 0), label: "订阅周期用量")
                 ProfileMetric(value: usage.tier.rawValue.capitalized, label: "当前方案")
             }
             .padding(.vertical, 18)
@@ -239,8 +240,8 @@ public struct SettingsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("活动洞察")
                     .font(.system(size: 18, weight: .semibold))
-                ProfileKeyValue(title: "本月已使用", value: "\(formatted(usage.monthly.unitsUsed)) 单位")
-//                ProfileKeyValue(title: "当前模型", value: usage.byModel.first?.model ?? "自动选择")
+                ProfileKeyValue(title: "本周已使用", value: "\(formatted(usage.weekly.unitsUsed)) 单位")
+                ProfileKeyValue(title: "当前模型", value: usage.byModel?.first?.model ?? "自动选择")
                 ProfileKeyValue(title: "工作区权限", value: defaultPermission ? "已启用" : "按需请求")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -254,7 +255,7 @@ public struct SettingsView: View {
                 Text("用量")
                     .font(.system(size: 18, weight: .semibold))
                 ProfileKeyValue(title: "订阅方案", value: usage.tier.rawValue.capitalized)
-                ProfileKeyValue(title: "本月额度", value: monthlyQuotaText)
+                ProfileKeyValue(title: "每周额度", value: weeklyQuotaText)
                 ProfileKeyValue(title: "登录状态", value: authManager.isLoggedIn ? "已登录" : "未登录")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -263,7 +264,7 @@ public struct SettingsView: View {
 
     private var accountSettings: some View {
         VStack(alignment: .leading, spacing: 0) {
-            settingsTitle(selection == .usage ? "使用情况和计费" : "账户")
+            settingsTitle("账户")
             sectionTitle("账户信息")
             settingsCard {
                 SettingsValueRow(title: "昵称", description: "当前登录账户") {
@@ -286,6 +287,56 @@ public struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.red)
+            }
+        }
+    }
+
+    private var usageBillingSettings: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            settingsTitle("使用情况和计费")
+            Text("如需管理订阅或购买额外点数，请前往网页端设置。")
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
+                .padding(.top, -38)
+                .padding(.bottom, 58)
+
+            if let usage = agentManager.usage {
+                sectionTitle("当前套餐")
+                settingsCard {
+                    SettingsValueRow(title: "\(usage.tier.rawValue.capitalized) 套餐", description: subscriptionDescription(for: usage)) {
+                        Text("查看套餐")
+                            .settingsPickerCapsule()
+                    }
+                }
+
+                sectionTitle("通用使用限额")
+                settingsCard {
+                    WeeklyQuotaRow(usage: usage.weekly)
+                }
+
+                if let cycle = usage.cycle {
+                    sectionTitle("订阅周期")
+                    settingsCard {
+                        SettingsValueRow(title: "订阅周期用量", description: "至 \(formattedResetDate(cycle.resetsAt))") {
+                            Text("\(formatted(max(cycle.unitsLimit - cycle.unitsUsed, 0))) / \(formatted(cycle.unitsLimit)) 剩余")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                if !usage.availableResetCards.isEmpty {
+                    sectionTitle("使用限制重置")
+                    settingsCard {
+                        ForEach(usage.availableResetCards) { card in
+                            ResetCardSettingsRow(card: card) {
+                                agentManager.redeemResetCard(card)
+                            }
+                        }
+                    }
+                }
+            } else {
+                ProgressView("正在获取使用情况…")
+                    .padding(.top, 24)
             }
         }
     }
@@ -338,10 +389,19 @@ public struct SettingsView: View {
     private var accountInitial: String { String(accountName.prefix(1)).uppercased() }
     private var accountSubtitle: String { agentManager.usage?.tier.rawValue.capitalized ?? "CodeAgent 用户" }
 
-    private var monthlyQuotaText: String {
+    private var weeklyQuotaText: String {
         guard let usage = agentManager.usage else { return "暂不可用" }
-        let remaining = max(usage.monthly.unitsLimit - usage.monthly.unitsUsed, 0)
-        return "\(formatted(remaining)) / \(formatted(usage.monthly.unitsLimit)) 剩余"
+        let remaining = max(usage.weekly.unitsLimit - usage.weekly.unitsUsed, 0)
+        return "\(formatted(remaining)) / \(formatted(usage.weekly.unitsLimit)) 剩余"
+    }
+
+    private func subscriptionDescription(for usage: UsageInfo) -> String {
+        usage.tier == .free ? "当前免费服务等级" : "订阅状态正常"
+    }
+
+    private func formattedResetDate(_ value: String) -> String {
+        guard let date = ISO8601DateFormatter().date(from: value) else { return value }
+        return date.formatted(.dateTime.month(.abbreviated).day())
     }
 
     private func formatted(_ value: Int) -> String {
@@ -438,6 +498,70 @@ private struct SettingsValueRow<Trailing: View>: View {
         .padding(.horizontal, 30)
         .padding(.vertical, 21)
         .overlay(alignment: .bottom) { Divider().padding(.leading, 30) }
+    }
+}
+
+private struct WeeklyQuotaRow: View {
+    let usage: UsageInfo.Units
+
+    var body: some View {
+        HStack(spacing: 22) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("每周使用限制")
+                    .font(.system(size: 17, weight: .semibold))
+                Text("重置时间：\(formattedDate(usage.resetsAt))")
+                    .font(.system(size: 15))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 16)
+            VStack(alignment: .trailing, spacing: 7) {
+                ProgressView(value: min(max(usage.utilizationPct, 0), 100), total: 100)
+                    .tint(usage.utilizationPct >= 90 ? .orange : .primary)
+                    .frame(width: 132)
+                Text("剩余 \(Int(max(100 - usage.utilizationPct, 0).rounded()))%")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 30)
+        .padding(.vertical, 21)
+    }
+
+    private func formattedDate(_ value: String) -> String {
+        guard let date = ISO8601DateFormatter().date(from: value) else { return value }
+        return date.formatted(.dateTime.month(.abbreviated).day())
+    }
+}
+
+private struct ResetCardSettingsRow: View {
+    let card: UsageInfo.ResetCard
+    let onRedeem: () -> Void
+    @Environment(AgentManager.self) private var agentManager
+
+    var body: some View {
+        HStack(spacing: 20) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Full reset")
+                    .font(.system(size: 17, weight: .semibold))
+                Text("\(formattedDate(card.expiresAt)) 到期")
+                    .font(.system(size: 15))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 24)
+            Button(agentManager.isRedeemingResetCard ? "正在使用…" : "使用重置额度") {
+                onRedeem()
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.primary)
+            .disabled(agentManager.isRedeemingResetCard)
+        }
+        .padding(.horizontal, 30)
+        .padding(.vertical, 21)
+    }
+
+    private func formattedDate(_ value: String?) -> String {
+        guard let value, let date = ISO8601DateFormatter().date(from: value) else { return "—" }
+        return date.formatted(.dateTime.month(.abbreviated).day())
     }
 }
 

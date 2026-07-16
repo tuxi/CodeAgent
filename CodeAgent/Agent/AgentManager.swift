@@ -30,6 +30,9 @@ public final class AgentManager {
     let apiProvider: ApiProvider
     // MARK: - Published State
     public private(set) var usage: UsageInfo?
+    public private(set) var isRedeemingResetCard = false
+    public private(set) var usageError: String?
+    private var redeemIdempotencyKeys: [String: String] = [:]
 
     // MARK: - Dependencies
 
@@ -50,7 +53,48 @@ public final class AgentManager {
             do {
                 let usage: UsageInfo = try await apiProvider.request(endpoint: AgentApi.usage)
                 self.usage = usage
+                self.usageError = nil
             } catch {
+                self.usageError = error.localizedDescription
+                DLLog(error)
+            }
+        }
+    }
+
+    public func refreshResetCards() {
+        Task {
+            do {
+                let cards: UsageInfo.ResetCardSummary = try await apiProvider.request(endpoint: AgentApi.resetCards)
+                guard let usage else { return }
+                self.usage = UsageInfo(
+                    quotaPolicy: usage.quotaPolicy, fiveHour: usage.fiveHour, weekly: usage.weekly,
+                    subscriptionCycle: usage.subscriptionCycle, monthly: usage.monthly, byModel: usage.byModel,
+                    purchasedUnits: usage.purchasedUnits, currentFundingSource: usage.currentFundingSource,
+                    resetCards: cards, mode: usage.mode, tier: usage.tier
+                )
+            } catch {
+                self.usageError = error.localizedDescription
+                DLLog(error)
+            }
+        }
+    }
+
+    public func redeemResetCard(_ card: UsageInfo.ResetCard) {
+        guard !isRedeemingResetCard else { return }
+        isRedeemingResetCard = true
+        usageError = nil
+        let key = redeemIdempotencyKeys[card.cardID] ?? UUID().uuidString
+        redeemIdempotencyKeys[card.cardID] = key
+        Task {
+            defer { isRedeemingResetCard = false }
+            do {
+                let _: ResetCardRedeemResponse = try await apiProvider.request(
+                    endpoint: AgentApi.redeemResetCard(id: card.cardID, idempotencyKey: key)
+                )
+                redeemIdempotencyKeys[card.cardID] = nil
+                fetchUsage()
+            } catch {
+                usageError = error.localizedDescription
                 DLLog(error)
             }
         }
@@ -61,6 +105,9 @@ public final class AgentManager {
         return models
     }
 }
+
+/// 核销结果的字段由网关演进；客户端只需确认 `data` 是有效对象，随后刷新 usage。
+private struct ResetCardRedeemResponse: Codable, Sendable {}
 
 // MARK: - JWT Decoding
 
